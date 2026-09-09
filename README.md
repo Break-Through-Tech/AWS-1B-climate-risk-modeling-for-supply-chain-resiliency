@@ -79,9 +79,9 @@ _Note: Some features may contain missing values due to sensor malfunctions. Prog
 
 ## Getting Started
 
-Clone the github repo on their VS Code.
-Read README.md
-Install the requirements from requirements.txt
+Our team uses **VS Code locally** as the primary development environment.
+
+Clone this repository, open its folder in VS Code, and follow the installation steps below.
 
 ### Target variable
 
@@ -100,8 +100,8 @@ The dataset doesn't come with a pre-labeled target variable. The target would be
 ### Installation
 
 ```bash
-git clone <repository-url>
-cd climate-risk-modeling
+git clone https://github.com/Break-Through-Tech/AWS-1B-climate-risk-modeling-for-supply-chain-resiliency.git
+cd AWS-1B-climate-risk-modeling-for-supply-chain-resiliency
 pip install -r requirements.txt
 ```
 
@@ -123,6 +123,8 @@ _Roles and assignments to be defined in the September scoping document._
 
 Tina Zeng
 Tejaswi Amatya
+Jonathan Cortez
+Ayushi Das
 
 ## License
 
