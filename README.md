@@ -78,6 +78,9 @@ The dataset contains spatial-temporal oceanographic and atmospheric measurements
 ```
 
 ## Getting Started
+Clone the github repo on their VS Code. 
+Read README.md
+Install the requirements from requirements.txt
 
 ### Target variable
 
@@ -112,6 +115,8 @@ pip install -r requirements.txt
 ## Team
 
 *Roles and assignments to be defined in the September scoping document.*
+
+Tina Zeng
 
 ## License
 
