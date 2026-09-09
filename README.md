@@ -117,6 +117,7 @@ pip install -r requirements.txt
 *Roles and assignments to be defined in the September scoping document.*
 
 Tina Zeng
+Jonathan Cortez
 
 ## License
 
