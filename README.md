@@ -118,6 +118,7 @@ pip install -r requirements.txt
 
 Tina Zeng
 Jonathan Cortez
+Ayushi Das
 
 ## License
 
