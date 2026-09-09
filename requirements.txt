@@ -1,1 +1,26 @@
+# notebook environment
+jupyter
+ipykernel
 
+# core data handling
+pandas
+numpy
+
+# ML
+scikit-learn
+xgboost
+lightgbm
+
+# model interpretability
+shap
+
+# visualization
+matplotlib
+seaborn
+
+# deep learning (stretch goal: LSTM)
+torch
+
+# interactive dashboard (stretch goal)
+streamlit
+gradio
