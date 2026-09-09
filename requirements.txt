@@ -24,3 +24,4 @@ torch
 # interactive dashboard (stretch goal)
 streamlit
 gradio
+ucimlrepo
