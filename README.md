@@ -15,22 +15,22 @@ The dataset contains spatial-temporal oceanographic and atmospheric measurements
 
 ### Data Dictionary
 
-| Feature | Description | Unit |
-|---------|-------------|------|
-| `latitude` | Buoy latitude position | Degrees |
-| `longitude` | Buoy longitude position | Degrees |
-| `year` | Observation year | YYYY |
-| `month` | Observation month | 1-12 |
-| `day` | Observation day | 1-31 |
-| `date` | Full observation date | Date |
-| `ss_temp` | Sea surface temperature | Celsius |
-| `air_temp` | Air temperature | Celsius |
-| `humidity` | Relative humidity | Percent |
-| `zonal_wind` | East-west wind component (u-wind) | m/s |
-| `meridional_wind` | North-south wind component (v-wind) | m/s |
-| `subsurface_temp` | Subsurface ocean temperature | Celsius |
+| Feature           | Description                         | Unit    |
+| ----------------- | ----------------------------------- | ------- |
+| `latitude`        | Buoy latitude position              | Degrees |
+| `longitude`       | Buoy longitude position             | Degrees |
+| `year`            | Observation year                    | YYYY    |
+| `month`           | Observation month                   | 1-12    |
+| `day`             | Observation day                     | 1-31    |
+| `date`            | Full observation date               | Date    |
+| `ss_temp`         | Sea surface temperature             | Celsius |
+| `air_temp`        | Air temperature                     | Celsius |
+| `humidity`        | Relative humidity                   | Percent |
+| `zonal_wind`      | East-west wind component (u-wind)   | m/s     |
+| `meridional_wind` | North-south wind component (v-wind) | m/s     |
+| `subsurface_temp` | Subsurface ocean temperature        | Celsius |
 
-*Note: Some features may contain missing values due to sensor malfunctions. Programmatic imputation is part of the pipeline.*
+_Note: Some features may contain missing values due to sensor malfunctions. Programmatic imputation is part of the pipeline._
 
 ## Project Goals
 
@@ -40,20 +40,20 @@ The dataset contains spatial-temporal oceanographic and atmospheric measurements
 
 ## Evaluation Metrics
 
-| Criterion | What We Measure |
-|-----------|-----------------|
-| Pipeline Completeness | Modular ingestion of raw UCI data, programmatic imputation of sensor logs, and reproducible train/validation/test splits |
-| Predictive Performance | Macro F1-Score that significantly outperforms a naive baseline, capturing rare high-impact anomalies |
-| Model Interpretability | Feature importance or SHAP value plots explaining which variables drive risk flags for business audiences |
-| Professional Handoff | Clean repository, well-commented code, data dictionary, and a final presentation translating findings into business insights |
+| Criterion              | What We Measure                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Pipeline Completeness  | Modular ingestion of raw UCI data, programmatic imputation of sensor logs, and reproducible train/validation/test splits     |
+| Predictive Performance | Macro F1-Score that significantly outperforms a naive baseline, capturing rare high-impact anomalies                         |
+| Model Interpretability | Feature importance or SHAP value plots explaining which variables drive risk flags for business audiences                    |
+| Professional Handoff   | Clean repository, well-commented code, data dictionary, and a final presentation translating findings into business insights |
 
 ## Timeline
 
-| Month | Milestone | Key Activities |
-|-------|-----------|----------------|
-| September | Technical scoping document | Deconstruct the business problem, initialize coding environments, define team roles and task distributions, confirm initial data loading |
-| October | Modular preprocessing script | Clean the raw dataset, engineer time-series features, implement programmatic imputation, produce reproducible train/validation/test splits |
-| November | Final model, repository, and presentation | Train and tune models, serialize model artifacts, generate SHAP plots and a validation leaderboard, finalize a production-grade GitHub repo, deliver a live presentation to leadership |
+| Month     | Milestone                                 | Key Activities                                                                                                                                                                         |
+| --------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| September | Technical scoping document                | Deconstruct the business problem, initialize coding environments, define team roles and task distributions, confirm initial data loading                                               |
+| October   | Modular preprocessing script              | Clean the raw dataset, engineer time-series features, implement programmatic imputation, produce reproducible train/validation/test splits                                             |
+| November  | Final model, repository, and presentation | Train and tune models, serialize model artifacts, generate SHAP plots and a validation leaderboard, finalize a production-grade GitHub repo, deliver a live presentation to leadership |
 
 ## EXAMPLE Repository Structure
 
@@ -78,7 +78,8 @@ The dataset contains spatial-temporal oceanographic and atmospheric measurements
 ```
 
 ## Getting Started
-Clone the github repo on their VS Code. 
+
+Clone the github repo on their VS Code.
 Read README.md
 Install the requirements from requirements.txt
 
@@ -86,9 +87,9 @@ Install the requirements from requirements.txt
 
 The dataset doesn't come with a pre-labeled target variable. The target would be climate risk class derived from Sea Surface Temperature Anomalies (SSTAs). An example is:
 
-  - Normal: SSTA within a threshold (e.g., -0.5 to +0.5 degrees C)
-  - Warming risk: SSTA above +0.5 (El Nino signal)
-  - Cooling risk: SSTA below -0.5 (La Nina signal)
+- Normal: SSTA within a threshold (e.g., -0.5 to +0.5 degrees C)
+- Warming risk: SSTA above +0.5 (El Nino signal)
+- Cooling risk: SSTA below -0.5 (La Nina signal)
 
 ### Prerequisites
 
@@ -112,11 +113,16 @@ pip install -r requirements.txt
 - **Stretch (deep learning):** PyTorch (LSTM)
 - **Stretch (dashboard):** Streamlit or Gradio
 
-## Team
+### Choice of primary environment
 
-*Roles and assignments to be defined in the September scoping document.*
+VS Code
+
+### Team
+
+_Roles and assignments to be defined in the September scoping document._
 
 Tina Zeng
+Tejaswi Amatya
 
 ## License
 
