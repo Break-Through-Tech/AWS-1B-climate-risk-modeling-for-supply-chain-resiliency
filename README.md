@@ -32,6 +32,10 @@ The dataset contains spatial-temporal oceanographic and atmospheric measurements
 
 _Note: Some features may contain missing values due to sensor malfunctions. Programmatic imputation is part of the pipeline._
 
+### Buoy sites (`site_id`)
+
+Raw coordinates drift, so the data has 8,536 distinct lat/lon pairs. `python src/site_assignment.py` groups them into 79 physical mooring sites and writes `data/processed/site_assignments.csv`, with one `site_id` per observation. Group by `site_id`, not by raw coordinates. See [docs/site_id.md](docs/site_id.md) for the method, validation and unresolved cases.
+
 ## Project Goals
 
 **Primary:** Build a classification model using Gradient Boosted Trees and time-series feature engineering that significantly outperforms a naive baseline at predicting climate risk thresholds (extreme warming/cooling spikes vs. normal states), evaluated on Macro F1-Score.
