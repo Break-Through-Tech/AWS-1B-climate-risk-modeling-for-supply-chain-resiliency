@@ -36,6 +36,34 @@ _Note: Some features may contain missing values due to sensor malfunctions. Prog
 
 Raw coordinates drift, so the data has 8,536 distinct lat/lon pairs. `python src/site_assignment.py` groups them into 79 physical mooring sites and writes `data/processed/site_assignments.csv`, with one `site_id` per observation. Group by `site_id`, not by raw coordinates. See [docs/site_id.md](docs/site_id.md) for the method, validation and unresolved cases.
 
+## Chronological split
+
+The buoy record is split on the calendar date built from `year`, `month`, and `day`. A year stored as 80 through 98 means 1900 plus that year. A year stored as 1980 through 1998 is kept. Each range includes its first and last day, and the next range starts on the following day.
+
+| Partition | First day | Last day |
+| --- | --- | --- |
+| train | 1980-03-07 | 1994-12-31 |
+| validation | 1995-01-01 | 1996-12-31 |
+| test | 1997-01-01 | 1998-06-23 |
+
+`n_splits` is 5. `python -m src.split` reads `data/el_nino_features.csv` and writes `data/processed/train.csv`, `data/processed/validation.csv`, and `data/processed/test.csv`. Each file keeps the original columns and adds `split`, whose values are `train`, `validation`, and `test`. The raw table stays at `data/el_nino_features.csv`.
+
+Climatology, imputation, rolling windows, and any scaler must be fit on dates through 1994-12-31 and then applied forward. Climatology is **not-yet**. Imputation is **not-yet**. Feature windows are **not-yet**. Those artifacts do not exist.
+
+Lags and rolling windows look backward inside one site.
+
+The label is the anomaly on the same row, so that row's sea surface temperature is not also a feature.
+
+Time series folds use 5 splits and a gap of 0 on the distinct training dates only. On the current raw file:
+
+1. train 1980-03-07 through 1982-11-16, test 1982-11-17 through 1985-09-09
+2. train 1980-03-07 through 1985-09-09, test 1985-09-10 through 1988-01-07
+3. train 1980-03-07 through 1988-01-07, test 1988-01-08 through 1990-05-06
+4. train 1980-03-07 through 1990-05-06, test 1990-05-07 through 1992-09-02
+5. train 1980-03-07 through 1992-09-02, test 1992-09-03 through 1994-12-31
+
+Folds whose training side ends before 1992 are the small early array. The official test score is the 1997–98 block.
+
 ## Project Goals
 
 **Primary:** Build a classification model using Gradient Boosted Trees and time-series feature engineering that significantly outperforms a naive baseline at predicting climate risk thresholds (extreme warming/cooling spikes vs. normal states), evaluated on Macro F1-Score.
