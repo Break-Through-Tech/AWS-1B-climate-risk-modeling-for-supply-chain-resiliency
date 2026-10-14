@@ -1,7 +1,8 @@
 """Build an interactive HTML viewer for the buoy site clusters.
 
 Reads the outputs of src/site_assignment.py and writes a single self-contained
-page, reports/site_id/site_explorer.html, that can be opened in any browser.
+page, reports/site_id/site_explorer.html. Open it in a web browser: editors and
+GitHub show only the source, because the page is drawn by JavaScript.
 
 Run from the repository root, after src/site_assignment.py:
     python src/site_explorer.py
@@ -54,7 +55,7 @@ def build_payload():
             "source": r.nominal_source, "mlat": r.medoid_lat, "mlon": r.medoid_lon,
             "n": int(r.n_obs), "coords": int(r.n_unique_coords), "first": r.first_obs, "last": r.last_obs,
             "med": r.spread_median_km, "p95": r.spread_p95_km, "max": r.spread_max_km, "far": int(r.n_far_from_nominal),
-            "grid": r.nearest_grid_code, "gridKm": r.nearest_grid_km, "clusters": int(r.n_position_clusters),
+            "doc": r.nearest_documented_site, "docKm": r.nearest_documented_km, "clusters": int(r.n_position_clusters),
             "series": str(r.series_ids), "notes": "" if pd.isna(r.review_notes) else r.review_notes,
         })
 
@@ -70,9 +71,20 @@ def build_payload():
     return {"summary": summary, "sites": site_rows, "points": points}
 
 
+def standalone_page(template_html):
+    """Wrap the template (head tags, then page body) in a complete HTML document."""
+    split = template_html.index('<div class="wrap">')
+    head, body = template_html[:split], template_html[split:]
+    return (
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"{head}</head>\n<body>\n{body}</body>\n</html>\n"
+    )
+
+
 def main():
     payload = json.dumps(build_payload(), separators=(",", ":"))
-    html = TEMPLATE_PATH.read_text().replace("/*__DATA__*/null", payload)
+    html = standalone_page(TEMPLATE_PATH.read_text().replace("/*__DATA__*/null", payload))
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(html)
     print(f"Wrote {OUT_PATH} ({OUT_PATH.stat().st_size / 1e6:.1f} MB)")
