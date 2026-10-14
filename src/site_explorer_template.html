@@ -163,8 +163,9 @@ svg text { font-family: var(--font-data); font-size: 10.5px; fill: var(--ink-2);
         <span><i class="dot" style="background:var(--ok)"></i>Assigned</span>
         <span><i class="dot" style="background:var(--far)"></i>Flagged: more than 50 km from nominal</span>
         <span><i class="dot" style="background:var(--bad)"></i>Unassigned (drifting or isolated)</span>
-        <span><span class="sym">○</span>Site on the TAO grid</span>
-        <span><span class="sym">◇</span>Site at estimated medoid</span>
+        <span><span class="sym">○</span>Documented TAO/TRITON site</span>
+        <span><span class="sym">□</span>Historical site (grid convention)</span>
+        <span><span class="sym">◇</span>Estimated medoid</span>
       </div>
     </div>
     <div class="map-scroll"><svg id="map" role="img" aria-label="Map of buoy coordinates and site locations"></svg></div>
@@ -179,7 +180,7 @@ svg text { font-family: var(--font-data); font-size: 10.5px; fill: var(--ink-2);
           <option value="all">All sites</option>
           <option value="far">Has flagged obs</option>
           <option value="merged">Merged relocation</option>
-          <option value="est">Estimated location</option>
+          <option value="est">Not in official list</option>
         </select>
         <select id="sort" aria-label="Sort sites">
           <option value="id">Sort: site ID</option>
@@ -295,9 +296,11 @@ function drawMap() {
     const x = mx(s.lon), y = my(s.lat), on = i === selected;
     const mk = el("g", { class: "site-mark", tabindex: "0", role: "button", "aria-label": `${s.id} ${s.code}` }, map);
     el("circle", { cx: x, cy: y, r: 11, fill: "transparent" }, mk);
-    const shape = s.source === "tao_grid"
+    const half = on ? 5 : 4;
+    const shape = s.source === "documented"
       ? el("circle", { cx: x, cy: y, r: on ? 6.5 : 5 }, mk)
-      : el("rect", { x: x - (on ? 5 : 4), y: y - (on ? 5 : 4), width: on ? 10 : 8, height: on ? 10 : 8, transform: `rotate(45 ${x} ${y})` }, mk);
+      : el("rect", { x: x - half, y: y - half, width: half * 2, height: half * 2,
+          transform: s.source === "estimated_medoid" ? `rotate(45 ${x} ${y})` : "" }, mk);
     shape.setAttribute("class", "ring");
     shape.setAttribute("fill", on ? "var(--select)" : "var(--surface)");
     shape.setAttribute("fill-opacity", on ? 1 : 0.6);
@@ -325,7 +328,7 @@ function drawList() {
     if (term && !(`${s.id} ${s.code}`.toLowerCase().includes(term))) return false;
     if (f === "far") return s.far > 0;
     if (f === "merged") return s.clusters > 1;
-    if (f === "est") return s.source !== "tao_grid";
+    if (f === "est") return s.source !== "documented";
     return true;
   });
   const key = sortSel.value;
@@ -336,7 +339,8 @@ function drawList() {
     const chips = [
       s.far ? `<span class="chip far">${fmt(s.far)} flagged</span>` : "",
       s.clusters > 1 ? `<span class="chip merged">merged</span>` : "",
-      s.source !== "tao_grid" ? `<span class="chip est">estimated</span>` : "",
+      s.source === "grid_convention" ? `<span class="chip est">historical</span>` : "",
+      s.source === "estimated_medoid" ? `<span class="chip est">estimated</span>` : "",
     ].join("");
     return `<li><button type="button" class="row" role="option" data-i="${i}" aria-selected="${i === selected}" tabindex="-1">
       <span class="id">${s.id}</span><span class="code">${s.code}</span><span class="n">${fmt(s.n)}</span>
@@ -420,7 +424,7 @@ function drawPlot() {
     drawn.push({ p, x, y, r });
   }
   // Medoid (when it differs from the nominal) and nominal crosshair
-  if (s.source === "tao_grid" && (Math.abs(s.mlat - s.lat) > 0.005 || Math.abs(s.mlon - s.lon) > 0.005)) {
+  if (s.source !== "estimated_medoid" && (Math.abs(s.mlat - s.lat) > 0.005 || Math.abs(s.mlon - s.lon) > 0.005)) {
     const x = px(s.mlon), y = py(s.mlat);
     el("rect", { x: x - 4.5, y: y - 4.5, width: 9, height: 9, transform: `rotate(45 ${x} ${y})`, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, g);
   }
@@ -441,11 +445,13 @@ let hover = null;
 
 function drawFacts() {
   const s = sites[selected];
-  const src = s.source === "tao_grid" ? "TAO grid" : "Estimated medoid";
+  const src = { documented: "Official TAO/TRITON list", grid_convention: "Grid convention", estimated_medoid: "Estimated medoid" }[s.source];
+  const offsetKm = (() => { const r = Math.PI / 180, a = Math.sin((s.mlat - s.lat) * r / 2) ** 2 + Math.cos(s.lat * r) * Math.cos(s.mlat * r) * Math.sin((s.mlon - s.lon) * r / 2) ** 2; return 2 * 6371.0088 * Math.asin(Math.sqrt(a)); })();
   const notes = [];
   if (s.clusters > 1) notes.push(`<b>Merged relocation.</b> This site joins ${s.clusters} position clusters from the same buoy series.`);
-  if (s.far) notes.push(`<b>${fmt(s.far)} flagged observations</b> lie more than 50 km from the nominal location.`);
-  if (s.source !== "tao_grid") notes.push(`<b>Estimated location.</b> The medoid is ${s.gridKm} km from the nearest grid point, ${s.grid}, so it was not snapped.`);
+  if (s.far) notes.push(`<b>${fmt(s.far)} flagged observations</b> lie more than 50 km from the nominal location. They are kept: the SST check found no shift when the buoy moved off position.`);
+  if (s.source === "documented" && offsetKm > 25) notes.push(`<b>Offset from the documented position.</b> The buoy's usual position (medoid) is ${offsetKm.toFixed(0)} km from ${s.code}.`);
+  if (s.source !== "documented") notes.push(`<b>Not in the official TAO/TRITON list.</b> The nearest documented site is ${s.doc}, ${s.docKm} km away.${s.source === "grid_convention" ? " The location is snapped to the whole-degree grid used for site names." : " The location is the site's medoid."}`);
   if (s.notes.includes("multiple_series")) notes.push(`<b>Multiple series.</b> Observations come from series ${s.series.replaceAll(";", " and ")}.`);
   document.getElementById("facts").innerHTML = `
     <h2>${s.code}</h2><p class="sub">${s.id}</p>
@@ -463,7 +469,7 @@ function drawFacts() {
       <dt>Buoy series</dt><dd>${s.series.replaceAll(";", ", ")}</dd>
     </dl>
     ${notes.map(n => `<p class="note">${n}</p>`).join("")}
-    ${s.source === "tao_grid" && (s.mlat !== s.lat || s.mlon !== s.lon) ? `<p class="hint" style="padding:0">+ marks the nominal location; ◇ marks the medoid.</p>` : `<p class="hint" style="padding:0">+ marks the nominal location.</p>`}`;
+    ${s.source !== "estimated_medoid" && (s.mlat !== s.lat || s.mlon !== s.lon) ? `<p class="hint" style="padding:0">+ marks the nominal location; ◇ marks the medoid.</p>` : `<p class="hint" style="padding:0">+ marks the nominal location.</p>`}`;
 }
 
 // Plot interaction: hover, zoom, pan

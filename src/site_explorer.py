@@ -54,7 +54,7 @@ def build_payload():
             "source": r.nominal_source, "mlat": r.medoid_lat, "mlon": r.medoid_lon,
             "n": int(r.n_obs), "coords": int(r.n_unique_coords), "first": r.first_obs, "last": r.last_obs,
             "med": r.spread_median_km, "p95": r.spread_p95_km, "max": r.spread_max_km, "far": int(r.n_far_from_nominal),
-            "grid": r.nearest_grid_code, "gridKm": r.nearest_grid_km, "clusters": int(r.n_position_clusters),
+            "doc": r.nearest_documented_site, "docKm": r.nearest_documented_km, "clusters": int(r.n_position_clusters),
             "series": str(r.series_ids), "notes": "" if pd.isna(r.review_notes) else r.review_notes,
         })
 

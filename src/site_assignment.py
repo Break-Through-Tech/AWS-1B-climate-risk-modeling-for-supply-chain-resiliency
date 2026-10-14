@@ -14,8 +14,11 @@ Pipeline (see docs/site_id.md for the full rationale and results):
      weighted by observation count), sweeping several eps thresholds.
   5. Merge clusters that are alternative positions of the same series
      (same series_id, within RELOCATION_MERGE_KM).
-  6. Choose a nominal coordinate per site: snap to the TAO/TRITON whole-degree
-     site grid when the medoid is close to it, otherwise keep the medoid.
+  6. Choose a nominal coordinate per site: the documented TAO/TRITON site
+     (data/reference/tao_triton_sites.csv) when the site and the documented
+     position are each other's nearest match within DOC_MATCH_KM; otherwise the
+     whole-degree site-grid convention when the medoid is close to it; otherwise
+     the medoid itself.
   7. Attach site_id + nominal coordinates to each observation, flag uncertain
      rows, validate row counts, and write outputs.
 
@@ -35,6 +38,7 @@ from sklearn.cluster import DBSCAN
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_PATH = ROOT / "data" / "el_nino_features.csv"
+REFERENCE_PATH = ROOT / "data" / "reference" / "tao_triton_sites.csv"
 PROCESSED_DIR = ROOT / "data" / "processed"
 REPORT_DIR = ROOT / "reports" / "site_id"
 
@@ -46,8 +50,9 @@ DRIFT_KM_PER_DAY = 10.0  # moored buoys move a median ~1 km/day
 EPS_KM = 25.0  # DBSCAN neighbourhood radius
 EPS_SWEEP_KM = [2, 5, 10, 15, 25, 40, 60, 80, 100, 150]
 MIN_OBS = 30  # min observations (summed weight) for a DBSCAN core point
-RELOCATION_MERGE_KM = 150.0  # max distance between two positions of one series
-GRID_SNAP_DEG = 0.3  # medoid must be this close (lat and lon) to a grid point
+RELOCATION_MERGE_KM = 100.0  # max distance between two positions of one series
+DOC_MATCH_KM = 75.0  # max medoid distance to a documented TAO/TRITON site
+GRID_SNAP_DEG = 0.15  # medoid must be this close (lat and lon) to a grid point
 TAO_LATITUDES = (-8, -5, -2, 0, 2, 5, 7, 8, 9)  # latitude lines of the TAO/TRITON array
 FAR_FROM_NOMINAL_KM = 50.0  # observation-level review threshold
 LOW_SUPPORT_OBS = 100  # site-level review threshold
@@ -259,18 +264,37 @@ def nearest_grid_point(lat, lon):
 
 
 def nominal_location(lat, lon, tol=GRID_SNAP_DEG):
-    """Snap to the TAO/TRITON site grid when close, else keep the medoid."""
+    """Snap to the whole-degree site-grid convention when close, else keep the medoid."""
     glat, glon = nearest_grid_point(lat, lon)
     lon_diff = abs(((lon - glon) + 180) % 360 - 180)
     if abs(lat - glat) <= tol and lon_diff <= tol:
-        return glat, glon, "tao_grid"
+        return glat, glon, "grid_convention"
     return float(lat), float(lon), "estimated_medoid"
+
+
+def match_documented(medoid_lat, medoid_lon, reference, max_km=DOC_MATCH_KM):
+    """Pair each site with a documented site when both are each other's nearest match.
+
+    Returns a list (one entry per site) of the matched reference row index or None,
+    plus the distance from each site's medoid to its nearest documented site.
+    """
+    dist = haversine_km(
+        np.asarray(medoid_lat)[:, None], np.asarray(medoid_lon)[:, None],
+        reference["nominal_lat"].to_numpy()[None, :], reference["nominal_lon"].to_numpy()[None, :],
+    )
+    nearest_ref = dist.argmin(axis=1)
+    nearest_site = dist.argmin(axis=0)
+    matches = [
+        int(j) if nearest_site[j] == i and dist[i, j] <= max_km else None
+        for i, j in enumerate(nearest_ref)
+    ]
+    return matches, nearest_ref, dist.min(axis=1)
 
 
 # ---------------------------------------------------------------------------
 # 7. Assemble sites and attach to observations
 # ---------------------------------------------------------------------------
-def build_sites(df, labels):
+def build_sites(df, labels, reference):
     clusters = cluster_summary(df, labels)
     group_of, merges = merge_relocations(clusters)
     clusters["group"] = clusters.index.map(group_of)
@@ -280,24 +304,31 @@ def build_sites(df, labels):
     for grp, g in tmp[tmp["group"].notna()].groupby("group"):
         coords = g.groupby(["latitude", "longitude"]).size().reset_index(name="n")
         mlat, mlon = weighted_medoid(coords["latitude"], coords["longitude"], coords["n"])
-        nlat, nlon, source = nominal_location(mlat, mlon)
-        glat, glon = nearest_grid_point(mlat, mlon)
         member = clusters[clusters["group"] == grp]
         sites.append(
             {
                 "group": grp,
-                "nominal_lat": nlat,
-                "nominal_lon": nlon,
-                "nominal_source": source,
                 "medoid_lat": mlat,
                 "medoid_lon": mlon,
-                "nearest_grid_code": site_code(glat, glon),
-                "nearest_grid_km": round(float(haversine_km(mlat, mlon, glat, glon)), 1),
                 "n_position_clusters": len(member),
                 "series_ids": ";".join(str(s) for s in sorted(g["series_id"].unique())),
             }
         )
     sites = pd.DataFrame(sites)
+
+    # Nominal location: documented site first, then the grid convention, then the medoid.
+    matches, nearest_ref, nearest_km = match_documented(sites["medoid_lat"], sites["medoid_lon"], reference)
+    nominal = []
+    for (mlat, mlon), j in zip(sites[["medoid_lat", "medoid_lon"]].to_numpy(), matches):
+        if j is not None:
+            ref = reference.iloc[j]
+            nominal.append((ref["nominal_lat"], ref["nominal_lon"], "documented"))
+        else:
+            nominal.append(nominal_location(mlat, mlon))
+    sites[["nominal_lat", "nominal_lon", "nominal_source"]] = pd.DataFrame(nominal, index=sites.index)
+    sites["nearest_documented_site"] = reference["network"].to_numpy()[nearest_ref] + " " + reference["site_name"].to_numpy()[nearest_ref]
+    sites["nearest_documented_km"] = np.round(nearest_km, 1)
+
     # Stable ordering: south -> north, then west -> east on a 0-360 longitude.
     sites["_lon360"] = sites["nominal_lon"] % 360
     sites = sites.sort_values(["nominal_lat", "_lon360"]).reset_index(drop=True)
@@ -318,6 +349,9 @@ def attach_sites(df, labels, sites, clusters):
     reasons[out["site_id"].notna() & (out["dist_to_nominal_km"] > FAR_FROM_NOMINAL_KM)] = "far_from_nominal"
     out["review_reason"] = reasons.replace("", np.nan)
     out["needs_review"] = out["review_reason"].notna()
+    # Flagged rows match their neighbours' SST about as well as unflagged rows
+    # (docs/site_id.md, "Flagged rows"), so every assigned row is recommended.
+    out["use_for_climatology"] = out["site_id"].notna()
     return out
 
 
@@ -379,10 +413,11 @@ def plot_map(obs, sites, path):
     ax.scatter(lon360(ok["longitude"]), ok["latitude"], s=3, c=GRAY, lw=0, label=f"Observed coordinate, assigned ({len(ok):,} unique)")
     ax.scatter(lon360(drift["longitude"]), drift["latitude"], s=8, c=RED, lw=0, label=f"Unassigned: drifting ({len(drift):,} obs)")
     ax.scatter(lon360(noise["longitude"]), noise["latitude"], s=8, c=ORANGE, lw=0, label=f"Unassigned: isolated ({len(noise):,} obs)")
-    for src, marker in (("tao_grid", "o"), ("estimated_medoid", "D")):
+    source_style = {"documented": ("o", "documented TAO/TRITON"), "grid_convention": ("s", "grid convention"), "estimated_medoid": ("D", "estimated medoid")}
+    for src, (marker, name) in source_style.items():
         s = sites[sites["nominal_source"] == src]
         ax.scatter(lon360(s["nominal_lon"]), s["nominal_lat"], s=40, marker=marker, facecolors="none", edgecolors=BLUE, linewidths=1.5,
-                   label=f"Nominal site: {'TAO grid' if src == 'tao_grid' else 'estimated medoid'} ({len(s)})")
+                   label=f"Nominal site: {name} ({len(s)})")
     ticks = np.arange(130, 280, 10)
     ax.set_xticks(ticks, [f"{t}°E" if t < 180 else ("180°" if t == 180 else f"{360 - t}°W") for t in ticks])
     ax.set_ylabel("Latitude (°)", color=INK)
@@ -506,7 +541,7 @@ def main():
     sweep.to_csv(REPORT_DIR / "eps_sweep.csv", index=False)
 
     labels = cluster_observations(df, EPS_KM, MIN_OBS)
-    sites, clusters, merges = build_sites(df, labels)
+    sites, clusters, merges = build_sites(df, labels, pd.read_csv(REFERENCE_PATH))
     obs = attach_sites(df, labels, sites, clusters)
     sites = site_statistics(obs, sites)
 
@@ -516,11 +551,11 @@ def main():
 
     site_cols = ["site_id", "site_code", "nominal_lat", "nominal_lon", "nominal_source", "medoid_lat", "medoid_lon",
                  "n_obs", "n_unique_coords", "first_obs", "last_obs", "spread_median_km", "spread_p95_km",
-                 "spread_max_km", "n_far_from_nominal", "nearest_grid_code", "nearest_grid_km", "n_position_clusters", "series_ids", "same_day_conflicts", "review_notes"]
+                 "spread_max_km", "n_far_from_nominal", "nearest_documented_site", "nearest_documented_km", "n_position_clusters", "series_ids", "same_day_conflicts", "review_notes"]
     sites[site_cols].to_csv(PROCESSED_DIR / "site_lookup.csv", index=False)
 
     obs_cols = ["obs_id", "series_id", "latitude", "longitude", "site_id", "site_code", "nominal_lat", "nominal_lon",
-                "nominal_source", "dist_to_nominal_km", "is_drifting", "needs_review", "review_reason"]
+                "nominal_source", "dist_to_nominal_km", "is_drifting", "needs_review", "review_reason", "use_for_climatology"]
     out = obs[obs_cols].copy()
     out["dist_to_nominal_km"] = out["dist_to_nominal_km"].round(3)
     out.to_csv(PROCESSED_DIR / "site_assignments.csv", index=False)
@@ -541,7 +576,7 @@ def main():
     print(f"\nChosen parameters: eps={EPS_KM} km, min_obs={MIN_OBS}, drift>{DRIFT_KM_PER_DAY} km/day, relocation merge<={RELOCATION_MERGE_KM} km")
     print(f"DBSCAN position clusters: {len(clusters)}; relocation merges: {len(merges)}")
     print(f"Final sites: {len(sites)} (benchmark {EXPECTED_SITES}, difference {len(sites) - EXPECTED_SITES:+d})")
-    print(f"  nominal from TAO grid: {(sites['nominal_source'] == 'tao_grid').sum()}, estimated medoid: {(sites['nominal_source'] == 'estimated_medoid').sum()}")
+    print("  nominal source:", sites["nominal_source"].value_counts().to_dict())
     print(f"Observations: {len(obs):,} total, {obs['site_id'].notna().sum():,} assigned, {obs['site_id'].isna().sum():,} unassigned")
     print(obs["review_reason"].value_counts(dropna=False).to_string())
     print(f"Sites with review notes: {(sites['review_notes'] != '').sum()}")
