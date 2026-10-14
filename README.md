@@ -159,6 +159,7 @@ Tina Zeng
 Tejaswi Amatya
 Jonathan Cortez
 Ayushi Das
+Shivangi Manel
 
 ## License
 
