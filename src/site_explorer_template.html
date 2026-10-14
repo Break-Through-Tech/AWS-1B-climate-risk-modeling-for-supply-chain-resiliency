@@ -1,0 +1,529 @@
+<title>TAO Site Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a mooring-array chart across the top, then a site ledger (left) beside a zoomable position plot (right). */
+:root {
+  --bg: #f4f7f8;
+  --surface: #ffffff;
+  --ink: #10202a;
+  --ink-2: #4f606b;
+  --line: #dbe3e7;
+  --grid: #e9eef1;
+  --ok: #2a78d6;
+  --far: #e0621f;
+  --bad: #d23c3c;
+  --other: #aab5bc;
+  --select: #10202a;
+  --font-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d151a;
+    --surface: #142029;
+    --ink: #e4ecf0;
+    --ink-2: #98a8b2;
+    --line: #26343e;
+    --grid: #1c2a33;
+    --ok: #4b97ee;
+    --far: #f07a3a;
+    --bad: #ef6262;
+    --other: #4e5d67;
+    --select: #e4ecf0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d151a;
+  --surface: #142029;
+  --ink: #e4ecf0;
+  --ink-2: #98a8b2;
+  --line: #26343e;
+  --grid: #1c2a33;
+  --ok: #4b97ee;
+  --far: #f07a3a;
+  --bad: #ef6262;
+  --other: #4e5d67;
+  --select: #e4ecf0;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 var(--font-body);
+  padding-inline: 20px;
+  padding-block: 20px 32px;
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+
+header { display: grid; gap: 6px; }
+h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--ink-2); max-width: 75ch; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 6px; font-family: var(--font-data); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--ink); font-weight: 500; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.panel-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); margin: 0; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.sym { font-family: var(--font-data); color: var(--ink); font-weight: 500; }
+
+.map-scroll { overflow-x: auto; }
+#map { display: block; width: 100%; min-width: 820px; height: auto; }
+.site-mark { cursor: pointer; }
+.site-mark:focus { outline: none; }
+.site-mark:focus-visible .ring { stroke-width: 3; }
+
+.main { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .main { grid-template-columns: 1fr; } }
+
+.ledger { display: grid; grid-template-rows: auto auto 1fr; max-height: 760px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.controls input { grid-column: 1 / -1; }
+input, select, button { font: inherit; color: var(--ink); }
+input[type="search"], select {
+  width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-size: 13px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--ok); outline-offset: 1px; }
+.count { font-size: 12px; color: var(--ink-2); padding: 6px 14px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+#list { position: relative; list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+@media (max-width: 880px) { .ledger { max-height: 380px; } }
+.row {
+  width: 100%; display: grid; grid-template-columns: 76px 1fr auto; gap: 2px 10px; align-items: baseline;
+  padding: 8px 14px; background: none; border: 0; border-bottom: 1px solid var(--grid); text-align: left; cursor: pointer;
+}
+.row:hover { background: var(--grid); }
+.row[aria-selected="true"] { background: var(--grid); box-shadow: inset 3px 0 0 var(--ok); }
+.row .id { font-family: var(--font-data); font-size: 12px; color: var(--ink-2); }
+.row .code { font-weight: 600; font-size: 13.5px; }
+.row .n { font-family: var(--font-data); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.row .meta { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.spread { flex: 0 0 72px; height: 4px; border-radius: 2px; background: var(--grid); position: relative; overflow: hidden; }
+.spread i { position: absolute; inset: 0 auto 0 0; background: var(--ok); border-radius: 2px; }
+.spread-txt { font-family: var(--font-data); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chip { font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; padding: 0 6px; border-radius: 9px; border: 1px solid currentColor; line-height: 16px; }
+.chip.far { color: var(--far); }
+.chip.merged { color: var(--ok); }
+.chip.est { color: var(--ink-2); }
+
+.detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; }
+@media (max-width: 1100px) { .detail-body { grid-template-columns: 1fr; } }
+.plot-wrap { position: relative; border-right: 1px solid var(--line); }
+@media (max-width: 1100px) { .plot-wrap { border-right: 0; border-bottom: 1px solid var(--line); } }
+#plot { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; user-select: none; }
+#plot.dragging { cursor: grabbing; }
+.plot-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.tool-btns { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.tool-btns button { background: var(--surface); border: 0; border-right: 1px solid var(--line); padding: 3px 10px; cursor: pointer; font-size: 13px; }
+.tool-btns button:last-child { border-right: 0; }
+.tool-btns button:hover { background: var(--grid); }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.hint { font-size: 11.5px; color: var(--ink-2); padding: 6px 14px 10px; margin: 0; }
+
+.facts { padding: 12px 14px; display: grid; gap: 12px; align-content: start; }
+.facts h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.facts .sub { margin: -8px 0 0; font-family: var(--font-data); font-size: 12px; color: var(--ink-2); }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12.5px; }
+dt { color: var(--ink-2); }
+dd { margin: 0; font-family: var(--font-data); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.note { font-size: 12.5px; color: var(--ink-2); margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--grid); }
+.note b { color: var(--ink); font-weight: 600; }
+
+#tip {
+  position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12); max-width: 260px;
+}
+#tip .t { font-weight: 600; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+#tip .m { font-family: var(--font-data); font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+svg text { font-family: var(--font-data); font-size: 10.5px; fill: var(--ink-2); }
+@media (prefers-reduced-motion: no-preference) { .row { transition: background-color 0.12s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>TAO Site Explorer</h1>
+    <p class="lede">Every recorded buoy position in the UCI El Niño dataset, grouped into physical mooring sites. Pick a site on the chart or in the list to see its original coordinates, how each one was assigned, and which ones are flagged for review.</p>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <section class="panel" aria-labelledby="map-title">
+    <div class="panel-head">
+      <h2 class="panel-title" id="map-title">Tropical Pacific array</h2>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ok)"></i>Assigned</span>
+        <span><i class="dot" style="background:var(--far)"></i>Flagged: more than 50 km from nominal</span>
+        <span><i class="dot" style="background:var(--bad)"></i>Unassigned (drifting or isolated)</span>
+        <span><span class="sym">○</span>Site on the TAO grid</span>
+        <span><span class="sym">◇</span>Site at estimated medoid</span>
+      </div>
+    </div>
+    <div class="map-scroll"><svg id="map" role="img" aria-label="Map of buoy coordinates and site locations"></svg></div>
+  </section>
+
+  <div class="main">
+    <section class="panel ledger" aria-labelledby="list-title">
+      <div class="panel-head"><h2 class="panel-title" id="list-title">Sites</h2></div>
+      <div class="controls">
+        <input type="search" id="q" placeholder="Search by site ID or code, e.g. 0N110W" aria-label="Search sites">
+        <select id="filter" aria-label="Filter sites">
+          <option value="all">All sites</option>
+          <option value="far">Has flagged obs</option>
+          <option value="merged">Merged relocation</option>
+          <option value="est">Estimated location</option>
+        </select>
+        <select id="sort" aria-label="Sort sites">
+          <option value="id">Sort: site ID</option>
+          <option value="p95">Sort: widest spread</option>
+          <option value="far">Sort: most flagged</option>
+          <option value="n">Sort: most obs</option>
+        </select>
+      </div>
+      <div class="count" id="count"></div>
+      <ul id="list" role="listbox" aria-label="Sites" tabindex="0"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="detail-title">
+      <div class="panel-head">
+        <h2 class="panel-title" id="detail-title">Original coordinates</h2>
+        <div class="plot-tools">
+          <label class="check"><input type="checkbox" id="nearby" checked> Show nearby points from other sites</label>
+          <div class="tool-btns">
+            <button type="button" id="zin" aria-label="Zoom in">+</button>
+            <button type="button" id="zout" aria-label="Zoom out">−</button>
+            <button type="button" id="zreset">Fit site</button>
+          </div>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="plot-wrap">
+          <svg id="plot" role="img" aria-label="Scatter plot of the selected site's coordinates"></svg>
+          <p class="hint">Scroll to zoom, drag to pan, double-click to fit. Marker size grows with the number of observations at that exact coordinate.</p>
+        </div>
+        <div class="facts" id="facts"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const NS = "http://www.w3.org/2000/svg";
+const KM_PER_DEG = 111.195;
+const STATUS_LABEL = ["Assigned", "Flagged: far from nominal", "Unassigned: drifting", "Unassigned: isolated"];
+const fmt = n => n.toLocaleString("en-US");
+const dayToDate = d => new Date(Date.UTC(1980, 0, 1) + d * 864e5).toISOString().slice(0, 10);
+const lon360 = lon => ((lon % 360) + 360) % 360;
+const lonLabel = l => { const e = ((l + 180) % 360 + 360) % 360 - 180; return Math.abs(Math.abs(e) - 180) < 1e-9 ? "180°" : `${+Math.abs(e).toFixed(3)}°${e < 0 ? "W" : "E"}`; };
+const latLabel = l => l === 0 ? "0°" : `${+Math.abs(l).toFixed(3)}°${l < 0 ? "S" : "N"}`;
+function el(name, attrs = {}, parent) {
+  const n = document.createElementNS(NS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const colorOf = p => p[3] === 0 ? "var(--ok)" : p[3] === 1 ? "var(--far)" : "var(--bad)";
+
+const sites = DATA.sites;
+const points = DATA.points; // [lat, lon, siteIndex, status, n, firstDay, lastDay, distKm]
+const bySite = sites.map(() => []);
+points.forEach(p => { if (p[2] >= 0) bySite[p[2]].push(p); });
+const maxP95 = Math.max(...sites.map(s => s.p95));
+let selected = 0;
+
+// ---------- Summary ----------
+const S = DATA.summary;
+document.getElementById("stats").innerHTML = [
+  [fmt(S.rows), "observations"], [fmt(S.pairs), "distinct coordinate pairs"], [fmt(S.sites), "sites"],
+  [fmt(S.assigned), "assigned"], [fmt(S.far), "flagged"], [fmt(S.drifting + S.noise), "unassigned"],
+].map(([v, l]) => `<span><b>${v}</b> ${l}</span>`).join("");
+
+// ---------- Tooltip ----------
+const tip = document.getElementById("tip");
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > innerWidth - 8) left = x - r.width - 14;
+  if (top + r.height > innerHeight - 8) top = y - r.height - 14;
+  tip.style.left = Math.max(8, left) + "px"; tip.style.top = Math.max(8, top) + "px";
+}
+const hideTip = () => { tip.hidden = true; };
+function siteTip(s) {
+  return `<div class="t">${s.id} · ${s.code}</div><div class="m">${fmt(s.n)} obs · ${s.first.slice(0, 4)}–${s.last.slice(0, 4)}<br>p95 spread ${s.p95.toFixed(1)} km${s.far ? ` · ${fmt(s.far)} flagged` : ""}</div>`;
+}
+function pointTip(p) {
+  const site = p[2] >= 0 ? sites[p[2]] : null;
+  const dates = p[5] === p[6] ? dayToDate(p[5]) : `${dayToDate(p[5])} → ${dayToDate(p[6])}`;
+  return `<div class="t"><i class="dot" style="background:${p[2] >= 0 && p[2] !== selected ? "var(--other)" : colorOf(p)}"></i>${STATUS_LABEL[p[3]]}</div>
+    <div class="m">${latLabel(p[0])}, ${lonLabel(p[1])}<br>${fmt(p[4])} obs · ${dates}<br>${site ? `${site.id} ${site.code}${p[7] != null ? ` · ${p[7]} km from nominal` : ""}` : "No site"}</div>`;
+}
+
+// ---------- Overview map ----------
+const map = document.getElementById("map");
+const M = { W: 1200, H: 330, l: 46, r: 14, t: 12, b: 26, lon0: 132, lon1: 268, lat0: -10, lat1: 10 };
+M.pw = M.W - M.l - M.r; M.ph = M.H - M.t - M.b;
+const mx = lon => M.l + (lon360(lon) - M.lon0) / (M.lon1 - M.lon0) * M.pw;
+const my = lat => M.t + (M.lat1 - lat) / (M.lat1 - M.lat0) * M.ph;
+map.setAttribute("viewBox", `0 0 ${M.W} ${M.H}`);
+function drawMap() {
+  map.textContent = "";
+  el("rect", { x: M.l, y: M.t, width: M.pw, height: M.ph, fill: "var(--surface)" }, map);
+  for (const lat of [-8, -5, -2, 0, 2, 5, 8]) {
+    el("line", { x1: M.l, x2: M.l + M.pw, y1: my(lat), y2: my(lat), stroke: "var(--grid)", "stroke-width": lat === 0 ? 1.5 : 1 }, map);
+    el("text", { x: M.l - 6, y: my(lat) + 3.5, "text-anchor": "end" }, map).textContent = latLabel(lat);
+  }
+  for (let lon = 140; lon <= 260; lon += 10) {
+    el("line", { x1: mx(lon), x2: mx(lon), y1: M.t, y2: M.t + M.ph, stroke: "var(--grid)" }, map);
+    el("text", { x: mx(lon), y: M.H - 8, "text-anchor": "middle" }, map).textContent = lonLabel(lon);
+  }
+  const g = el("g", {}, map);
+  const order = [0, 1, 3, 2];
+  for (const st of order) for (const p of points) if (p[3] === st)
+    el("circle", { cx: mx(p[1]).toFixed(1), cy: my(p[0]).toFixed(1), r: st === 0 ? 1.3 : 1.6, fill: colorOf(p), "fill-opacity": st === 0 ? 0.55 : 0.85 }, g);
+  sites.forEach((s, i) => {
+    const x = mx(s.lon), y = my(s.lat), on = i === selected;
+    const mk = el("g", { class: "site-mark", tabindex: "0", role: "button", "aria-label": `${s.id} ${s.code}` }, map);
+    el("circle", { cx: x, cy: y, r: 11, fill: "transparent" }, mk);
+    const shape = s.source === "tao_grid"
+      ? el("circle", { cx: x, cy: y, r: on ? 6.5 : 5 }, mk)
+      : el("rect", { x: x - (on ? 5 : 4), y: y - (on ? 5 : 4), width: on ? 10 : 8, height: on ? 10 : 8, transform: `rotate(45 ${x} ${y})` }, mk);
+    shape.setAttribute("class", "ring");
+    shape.setAttribute("fill", on ? "var(--select)" : "var(--surface)");
+    shape.setAttribute("fill-opacity", on ? 1 : 0.6);
+    shape.setAttribute("stroke", on ? "var(--select)" : "var(--ok)");
+    shape.setAttribute("stroke-width", 1.8);
+    mk.addEventListener("click", () => select(i));
+    mk.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(i); } });
+    mk.addEventListener("mousemove", e => showTip(siteTip(s), e.clientX, e.clientY));
+    mk.addEventListener("mouseleave", hideTip);
+  });
+  const s = sites[selected];
+  const lbl = el("text", { x: mx(s.lon), y: my(s.lat) - 11, "text-anchor": "middle", style: "fill:var(--ink);font-weight:500" }, map);
+  lbl.textContent = s.code;
+}
+
+// ---------- Site list ----------
+const list = document.getElementById("list");
+const q = document.getElementById("q"), filterSel = document.getElementById("filter"), sortSel = document.getElementById("sort");
+let visible = [];
+function drawList() {
+  const term = q.value.trim().toLowerCase();
+  const f = filterSel.value;
+  visible = sites.map((s, i) => i).filter(i => {
+    const s = sites[i];
+    if (term && !(`${s.id} ${s.code}`.toLowerCase().includes(term))) return false;
+    if (f === "far") return s.far > 0;
+    if (f === "merged") return s.clusters > 1;
+    if (f === "est") return s.source !== "tao_grid";
+    return true;
+  });
+  const key = sortSel.value;
+  if (key !== "id") visible.sort((a, b) => sites[b][key] - sites[a][key]);
+  document.getElementById("count").textContent = `${visible.length} of ${sites.length} sites`;
+  list.innerHTML = visible.map(i => {
+    const s = sites[i];
+    const chips = [
+      s.far ? `<span class="chip far">${fmt(s.far)} flagged</span>` : "",
+      s.clusters > 1 ? `<span class="chip merged">merged</span>` : "",
+      s.source !== "tao_grid" ? `<span class="chip est">estimated</span>` : "",
+    ].join("");
+    return `<li><button type="button" class="row" role="option" data-i="${i}" aria-selected="${i === selected}" tabindex="-1">
+      <span class="id">${s.id}</span><span class="code">${s.code}</span><span class="n">${fmt(s.n)}</span>
+      <span class="meta"><span class="spread" title="95th-percentile spread"><i style="width:${Math.max(2, s.p95 / maxP95 * 100)}%"></i></span><span class="spread-txt">p95 ${s.p95.toFixed(0)} km</span>${chips}</span>
+    </button></li>`;
+  }).join("") || `<li class="hint">No sites match. Clear the search or pick another filter.</li>`;
+}
+list.addEventListener("click", e => { const b = e.target.closest(".row"); if (b) select(+b.dataset.i); });
+list.addEventListener("keydown", e => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const pos = visible.indexOf(selected);
+  const next = visible[Math.min(visible.length - 1, Math.max(0, (pos < 0 ? -1 : pos) + (e.key === "ArrowDown" ? 1 : -1)))];
+  if (next != null) select(next);
+});
+[q, filterSel, sortSel].forEach(c => c.addEventListener("input", drawList));
+
+// ---------- Detail plot ----------
+const plot = document.getElementById("plot");
+const P = { W: 760, H: 520, l: 62, r: 14, t: 14, b: 34 };
+P.pw = P.W - P.l - P.r; P.ph = P.H - P.t - P.b;
+plot.setAttribute("viewBox", `0 0 ${P.W} ${P.H}`);
+let view = null; // {cx, cy, span}: centre (lon relative to nominal unwrap, lat) and latitude span in degrees
+let drawn = [];
+const nearbyBox = document.getElementById("nearby");
+const rel = lon => { const n = sites[selected].lon; return ((lon - n + 180) % 360 + 360) % 360 - 180 + n; };
+function spanX() { return view.span * (P.pw / P.ph) / Math.cos(view.cy * Math.PI / 180); }
+const px = lon => P.l + (rel(lon) - (view.cx - spanX() / 2)) / spanX() * P.pw;
+const py = lat => P.t + ((view.cy + view.span / 2) - lat) / view.span * P.ph;
+
+function fitView() {
+  const pts = bySite[selected], s = sites[selected];
+  let la0 = s.lat, la1 = s.lat, lo0 = s.lon, lo1 = s.lon;
+  for (const p of pts) { la0 = Math.min(la0, p[0]); la1 = Math.max(la1, p[0]); const r = rel(p[1]); lo0 = Math.min(lo0, r); lo1 = Math.max(lo1, r); }
+  const cy = (la0 + la1) / 2, cx = (lo0 + lo1) / 2;
+  const aspect = (P.pw / P.ph) / Math.cos(cy * Math.PI / 180);
+  const span = Math.max(0.06, (la1 - la0) * 1.18, (lo1 - lo0) * 1.18 / aspect);
+  view = { cx, cy, span };
+}
+function niceStep(range, target) {
+  const raw = range / target, mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+}
+function ticks(lo, hi, target) {
+  const st = niceStep(hi - lo, target), out = [];
+  for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) out.push(+v.toFixed(6));
+  return out;
+}
+function drawPlot() {
+  plot.textContent = "";
+  const s = sites[selected];
+  const x0 = view.cx - spanX() / 2, x1 = view.cx + spanX() / 2, y0 = view.cy - view.span / 2, y1 = view.cy + view.span / 2;
+  const defs = el("defs", {}, plot);
+  const clip = el("clipPath", { id: "clip" }, defs);
+  el("rect", { x: P.l, y: P.t, width: P.pw, height: P.ph }, clip);
+  el("rect", { x: P.l, y: P.t, width: P.pw, height: P.ph, fill: "var(--surface)" }, plot);
+  for (const v of ticks(y0, y1, 6)) {
+    el("line", { x1: P.l, x2: P.l + P.pw, y1: py(v), y2: py(v), stroke: "var(--grid)" }, plot);
+    el("text", { x: P.l - 6, y: py(v) + 3.5, "text-anchor": "end" }, plot).textContent = latLabel(v);
+  }
+  for (const v of ticks(x0, x1, 5)) {
+    const x = P.l + (v - x0) / (x1 - x0) * P.pw;
+    el("line", { x1: x, x2: x, y1: P.t, y2: P.t + P.ph, stroke: "var(--grid)" }, plot);
+    el("text", { x, y: P.H - 12, "text-anchor": "middle" }, plot).textContent = lonLabel(v);
+  }
+  el("rect", { x: P.l, y: P.t, width: P.pw, height: P.ph, fill: "none", stroke: "var(--line)" }, plot);
+
+  const g = el("g", { "clip-path": "url(#clip)" }, plot);
+  const inView = p => p[0] >= y0 && p[0] <= y1 && rel(p[1]) >= x0 && rel(p[1]) <= x1;
+  const layers = [];
+  if (nearbyBox.checked) {
+    layers.push(points.filter(p => p[2] >= 0 && p[2] !== selected && inView(p)).map(p => [p, "var(--other)"]));
+    layers.push(points.filter(p => p[2] < 0 && inView(p)).map(p => [p, "var(--bad)"]));
+  }
+  layers.push(bySite[selected].filter(p => p[3] === 0 && inView(p)).map(p => [p, "var(--ok)"]));
+  layers.push(bySite[selected].filter(p => p[3] === 1 && inView(p)).map(p => [p, "var(--far)"]));
+  drawn = [];
+  for (const layer of layers) for (const [p, c] of layer) {
+    const x = px(p[1]), y = py(p[0]), r = 2.4 + 1.3 * Math.log10(p[4]);
+    el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: r.toFixed(2), fill: c, "fill-opacity": 0.85, stroke: "var(--surface)", "stroke-width": 0.8 }, g);
+    drawn.push({ p, x, y, r });
+  }
+  // Medoid (when it differs from the nominal) and nominal crosshair
+  if (s.source === "tao_grid" && (Math.abs(s.mlat - s.lat) > 0.005 || Math.abs(s.mlon - s.lon) > 0.005)) {
+    const x = px(s.mlon), y = py(s.mlat);
+    el("rect", { x: x - 4.5, y: y - 4.5, width: 9, height: 9, transform: `rotate(45 ${x} ${y})`, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, g);
+  }
+  const nx = px(s.lon), ny = py(s.lat);
+  el("path", { d: `M${nx - 9} ${ny}H${nx + 9}M${nx} ${ny - 9}V${ny + 9}`, stroke: "var(--surface)", "stroke-width": 5 }, g);
+  el("path", { d: `M${nx - 9} ${ny}H${nx + 9}M${nx} ${ny - 9}V${ny + 9}`, stroke: "var(--ink)", "stroke-width": 2 }, g);
+  hover = el("circle", { r: 0, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, visibility: "hidden" }, g);
+
+  // Scale bar in km
+  const pxPerKm = P.ph / (view.span * KM_PER_DEG);
+  const km = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find(k => k * pxPerKm >= P.pw / 7) || 500;
+  const bx = P.l + 12, by = P.t + P.ph - 14, bw = km * pxPerKm;
+  el("rect", { x: bx - 6, y: by - 16, width: bw + 12, height: 24, rx: 4, fill: "var(--surface)", "fill-opacity": 0.85 }, plot);
+  el("path", { d: `M${bx} ${by - 4}V${by}H${bx + bw}V${by - 4}`, stroke: "var(--ink)", "stroke-width": 1.5, fill: "none" }, plot);
+  el("text", { x: bx + bw / 2, y: by - 5, "text-anchor": "middle", style: "fill:var(--ink)" }, plot).textContent = `${km} km`;
+}
+let hover = null;
+
+function drawFacts() {
+  const s = sites[selected];
+  const src = s.source === "tao_grid" ? "TAO grid" : "Estimated medoid";
+  const notes = [];
+  if (s.clusters > 1) notes.push(`<b>Merged relocation.</b> This site joins ${s.clusters} position clusters from the same buoy series.`);
+  if (s.far) notes.push(`<b>${fmt(s.far)} flagged observations</b> lie more than 50 km from the nominal location.`);
+  if (s.source !== "tao_grid") notes.push(`<b>Estimated location.</b> The medoid is ${s.gridKm} km from the nearest grid point, ${s.grid}, so it was not snapped.`);
+  if (s.notes.includes("multiple_series")) notes.push(`<b>Multiple series.</b> Observations come from series ${s.series.replaceAll(";", " and ")}.`);
+  document.getElementById("facts").innerHTML = `
+    <h2>${s.code}</h2><p class="sub">${s.id}</p>
+    <dl>
+      <dt>Observations</dt><dd>${fmt(s.n)}</dd>
+      <dt>Unique coordinates</dt><dd>${fmt(s.coords)}</dd>
+      <dt>Record</dt><dd>${s.first} → ${s.last}</dd>
+      <dt>Nominal</dt><dd>${latLabel(s.lat)}, ${lonLabel(s.lon)}</dd>
+      <dt>Nominal source</dt><dd>${src}</dd>
+      <dt>Medoid</dt><dd>${latLabel(s.mlat)}, ${lonLabel(s.mlon)}</dd>
+      <dt>Spread, median</dt><dd>${s.med.toFixed(1)} km</dd>
+      <dt>Spread, p95</dt><dd>${s.p95.toFixed(1)} km</dd>
+      <dt>Spread, max</dt><dd>${s.max.toFixed(1)} km</dd>
+      <dt>Position clusters</dt><dd>${s.clusters}</dd>
+      <dt>Buoy series</dt><dd>${s.series.replaceAll(";", ", ")}</dd>
+    </dl>
+    ${notes.map(n => `<p class="note">${n}</p>`).join("")}
+    ${s.source === "tao_grid" && (s.mlat !== s.lat || s.mlon !== s.lon) ? `<p class="hint" style="padding:0">+ marks the nominal location; ◇ marks the medoid.</p>` : `<p class="hint" style="padding:0">+ marks the nominal location.</p>`}`;
+}
+
+// Plot interaction: hover, zoom, pan
+function toView(e) {
+  const pt = plot.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(plot.getScreenCTM().inverse());
+}
+function zoomAt(factor, vx, vy) {
+  const lonAt = view.cx - spanX() / 2 + (vx - P.l) / P.pw * spanX();
+  const latAt = view.cy + view.span / 2 - (vy - P.t) / P.ph * view.span;
+  const oldSX = spanX();
+  view.span = Math.min(12, Math.max(0.005, view.span * factor));
+  view.cx = lonAt + (view.cx - lonAt) * (spanX() / oldSX);
+  view.cy = latAt + (view.cy - latAt) * factor;
+  drawPlot();
+}
+let drag = null;
+plot.addEventListener("wheel", e => { e.preventDefault(); const v = toView(e); zoomAt(e.deltaY > 0 ? 1.2 : 1 / 1.2, v.x, v.y); }, { passive: false });
+plot.addEventListener("pointerdown", e => { drag = { v: toView(e), cx: view.cx, cy: view.cy, moved: false }; plot.setPointerCapture(e.pointerId); });
+plot.addEventListener("pointermove", e => {
+  const v = toView(e);
+  if (drag) {
+    const dx = v.x - drag.v.x, dy = v.y - drag.v.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; plot.classList.add("dragging"); hideTip(); }
+    if (drag.moved) { view.cx = drag.cx - dx / P.pw * spanX(); view.cy = drag.cy + dy / P.ph * view.span; drawPlot(); }
+    return;
+  }
+  let best = null, bd = Infinity;
+  for (const d of drawn) { const dd = (d.x - v.x) ** 2 + (d.y - v.y) ** 2; if (dd < bd) { best = d; bd = dd; } }
+  if (best && bd > Math.max(144, (best.r + 4) ** 2)) best = null;
+  if (best) {
+    hover.setAttribute("cx", best.x); hover.setAttribute("cy", best.y); hover.setAttribute("r", best.r + 3); hover.setAttribute("visibility", "visible");
+    showTip(pointTip(best.p), e.clientX, e.clientY);
+  } else { hover.setAttribute("visibility", "hidden"); hideTip(); }
+});
+const endDrag = () => { drag = null; plot.classList.remove("dragging"); };
+plot.addEventListener("pointerup", endDrag);
+plot.addEventListener("pointercancel", endDrag);
+plot.addEventListener("pointerleave", () => { if (!drag) { hideTip(); if (hover) hover.setAttribute("visibility", "hidden"); } });
+plot.addEventListener("dblclick", () => { fitView(); drawPlot(); });
+document.getElementById("zin").addEventListener("click", () => zoomAt(1 / 1.5, P.l + P.pw / 2, P.t + P.ph / 2));
+document.getElementById("zout").addEventListener("click", () => zoomAt(1.5, P.l + P.pw / 2, P.t + P.ph / 2));
+document.getElementById("zreset").addEventListener("click", () => { fitView(); drawPlot(); });
+nearbyBox.addEventListener("change", drawPlot);
+
+function select(i) {
+  selected = i;
+  fitView(); drawPlot(); drawMap(); drawFacts();
+  list.querySelectorAll(".row").forEach(b => b.setAttribute("aria-selected", +b.dataset.i === i));
+  const row = list.querySelector(`.row[data-i="${i}"]`);
+  if (row) { // scroll only the list, never the page
+    const top = row.offsetTop, bottom = top + row.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+  }
+  try { history.replaceState(null, "", "#" + sites[i].id); } catch (e) {}
+}
+
+const fromHash = sites.findIndex(s => s.id === decodeURIComponent(location.hash.slice(1)) || s.code === decodeURIComponent(location.hash.slice(1)));
+selected = fromHash >= 0 ? fromHash : Math.max(0, sites.findIndex(s => s.code === "0N170W"));
+drawList();
+select(selected);
+</script>
