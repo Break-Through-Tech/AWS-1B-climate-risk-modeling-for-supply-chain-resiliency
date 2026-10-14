@@ -1,5 +1,7 @@
 import pandas as pd
-df = pd.load_csv('data.csv')
+from pathlib import Path
+
+df = pd.read_csv(Path(__file__).parent.parent / "data" / "el_nino_features.csv")
 threshold = 0.5
 
 #Establish SST climatology
