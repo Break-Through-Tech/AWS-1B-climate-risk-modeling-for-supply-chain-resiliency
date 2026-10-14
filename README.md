@@ -36,6 +36,8 @@ _Note: Some features may contain missing values due to sensor malfunctions. Prog
 
 Raw coordinates drift, so the data has 8,536 distinct lat/lon pairs. `python src/site_assignment.py` groups them into 80 physical mooring sites (65 matched to the official TAO/TRITON site list) and writes `data/processed/site_assignments.csv`, with one `site_id` per observation. Group by `site_id`, not by raw coordinates, and keep rows where `use_for_climatology` is true. See [docs/site_id.md](docs/site_id.md) for the method, validation and unresolved cases.
 
+To explore the sites interactively, open `reports/site_id/site_explorer.html` in a web browser (in Finder, double-click it or drag it into Chrome). VS Code and GitHub show only the code, because the page is drawn by JavaScript.
+
 ## Chronological split
 
 The buoy record is split on the calendar date built from `year`, `month`, and `day`. A year stored as 80 through 98 means 1900 plus that year. A year stored as 1980 through 1998 is kept. Each range includes its first and last day, and the next range starts on the following day.

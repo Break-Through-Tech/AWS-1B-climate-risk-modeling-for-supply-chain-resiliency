@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TAO Site Explorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,6 +58,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
+  margin: 0;
   background: var(--bg);
   color: var(--ink);
   font: 14px/1.5 var(--font-body);
@@ -149,6 +155,8 @@ svg text { font-family: var(--font-data); font-size: 10.5px; fill: var(--ink-2);
 @media (prefers-reduced-motion: no-preference) { .row { transition: background-color 0.12s; } }
 </style>
 
+</head>
+<body>
 <div class="wrap">
   <header>
     <h1>TAO Site Explorer</h1>
@@ -533,3 +541,5 @@ selected = fromHash >= 0 ? fromHash : Math.max(0, sites.findIndex(s => s.code ==
 drawList();
 select(selected);
 </script>
+</body>
+</html>

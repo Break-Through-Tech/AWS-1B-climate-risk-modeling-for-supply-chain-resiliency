@@ -34,7 +34,7 @@ The UCI El Niño file has **8,536 distinct latitude/longitude pairs**, but it do
 | `reports/site_id/eps_sweep.csv` / `.png` | How the clustering results change with different distance thresholds. |
 | `reports/site_id/relocation_merges.csv` | The 7 cluster pairs merged because they are the same station at two positions. |
 | `reports/site_id/review_queue.csv` | Every observation flagged for review, with its reason. |
-| `reports/site_id/site_explorer.html` | Interactive viewer. Open it in a browser. |
+| `reports/site_id/site_explorer.html` | Interactive viewer. Open it in a web browser: double-click it in Finder, or drag it into Chrome. VS Code and GitHub show only the code, because the page is drawn by JavaScript. |
 | `reports/site_id/site_map.png`, `site_clusters_grid.png`, `site_zooms.png` | Static figures: an array map, one panel per site, and 4 close-up views. |
 
 ### How to use it
