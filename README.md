@@ -48,11 +48,13 @@ The buoy record is split on the calendar date built from `year`, `month`, and `d
 
 `n_splits` is 5. `python -m src.split` reads `data/el_nino_features.csv` and writes `data/processed/train.csv`, `data/processed/validation.csv`, and `data/processed/test.csv`. Each file keeps the original columns and adds `split`, whose values are `train`, `validation`, and `test`. The raw table stays at `data/el_nino_features.csv`.
 
-Climatology, imputation, rolling windows, and any scaler must be fit on dates through 1994-12-31 and then applied forward. Climatology is **not-yet**. Imputation is **not-yet**. Feature windows are **not-yet**. Those artifacts do not exist.
+Custom cutoffs must use `datetime.date` values. Each start must be on or before its end, with training ending before validation starts and validation ending before test starts. Invalid ranges raise `ValueError` before splitting.
 
-Lags and rolling windows look backward inside one site.
+Fit climatology, imputation, and any scaler on training dates only, through 1994-12-31, then apply the fitted values to validation and test. For each cross-validation fold, fit them again using only that fold's training dates.
 
-The label is the anomaly on the same row, so that row's sea surface temperature is not also a feature.
+Lags and rolling windows must use earlier observations from the same site. The target comes from the anomaly on the same row, so keep that row's sea surface temperature and the target out of the model inputs.
+
+Leakage checks are pending until preprocessing is connected to these splits. Check that changing validation or test measurements leaves training features and fitted statistics unchanged. With fitted statistics held fixed, changing later observations must not change earlier lags or rolling windows.
 
 Time series folds use 5 splits and a gap of 0 on the distinct training dates only. On the current raw file:
 
