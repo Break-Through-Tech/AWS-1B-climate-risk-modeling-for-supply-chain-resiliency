@@ -5,8 +5,6 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 RAW_PATH = ROOT / "data" / "el_nino_features.csv"
 ASSIGN_PATH = ROOT / "data" / "processed" / "site_assignments.csv"
-THRESHOLD = 0.5
-
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -14,14 +12,26 @@ from src.split import split_record
 
 
 def create_target(ssta):
-    """Convert a sea-surface-temperature anomaly into a risk class."""
+    """Convert an SSTA into one of the nine ENSO intensity classes."""
     if pd.isna(ssta):
         return pd.NA
-    if ssta <= -THRESHOLD:
-        return "cooling"
-    if ssta >= THRESHOLD:
-        return "warming"
-    return "normal"
+    if ssta >= 2.0:
+        return "very_strong_el_nino"
+    if ssta >= 1.5:
+        return "strong_el_nino"
+    if ssta >= 1.0:
+        return "moderate_el_nino"
+    if ssta >= 0.5:
+        return "weak_el_nino"
+    if ssta > -0.5:
+        return "neutral"
+    if ssta > -1.0:
+        return "weak_la_nina"
+    if ssta > -1.5:
+        return "moderate_la_nina"
+    if ssta > -2.0:
+        return "strong_la_nina"
+    return "very_strong_la_nina"
 
 
 def main():
@@ -36,6 +46,12 @@ def main():
         how="left",
         validate="one_to_one",
     )
+    if len(df) != len(raw):
+        raise ValueError(
+            f"Site assignment merge changed the row count: {len(raw):,} -> {len(df):,}"
+        )
+    missing_sites = int(df["site_id"].isna().sum())
+    print(f"Rows without a site assignment: {missing_sites:,}")
 
     # Build the chronological partitions from the raw observations.
     split_result = split_record(df)
