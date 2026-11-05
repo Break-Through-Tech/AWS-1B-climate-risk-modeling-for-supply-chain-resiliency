@@ -143,11 +143,11 @@ pip install -r requirements.txt
 
 ## Tech Stack
 
-- **Data processing:** pandas, NumPy, scikit-learn
-- **Modeling:** XGBoost or LightGBM (Gradient Boosted Trees)
-- **Interpretability:** SHAP
-- **Stretch (deep learning):** PyTorch (LSTM)
-- **Stretch (dashboard):** Streamlit or Gradio
+- **Runtime:** Python 3.10+ with pandas, NumPy, and scikit-learn
+- **Site assignment:** pandas, NumPy, scikit-learn DBSCAN, and matplotlib
+- **Data acquisition:** `ucimlrepo` in `notebooks/fetch_el_nino.py`
+- **Planned modeling:** XGBoost or LightGBM, with SHAP interpretability
+- **Planned extensions:** PyTorch sequence models and a Streamlit or Gradio dashboard
 
 ### Choice of primary environment
 
@@ -162,6 +162,78 @@ Tejaswi Amatya
 Jonathan Cortez
 Ayushi Das
 Shivangi Manel
+
+## Current Implementation Workflow
+
+The codebase currently implements data acquisition support, physical-site
+reconstruction, site-quality validation, chronological splitting, and an
+exploratory target-building path. It does not yet include model training,
+prediction, completed imputation, rolling-window features, or a deployed
+dashboard.
+
+Run the implemented workflow from the repository root:
+
+```bash
+# Optional: fetch the UCI dataset into a pandas dataframe
+python notebooks/fetch_el_nino.py
+
+# Assign observations to physical mooring sites
+python src/site_assignment.py
+
+# Validate SST behavior for observations far from nominal site locations
+python src/site_quality_check.py
+
+# Generate the standalone interactive site explorer
+python src/site_explorer.py
+
+# Create chronological train/validation/test files
+python -m src.split
+
+# Run the tests
+python -m unittest tests/test_site_assignment.py tests/test_split.py
+```
+
+### Workflow stages
+
+1. **Site assignment:** `src/site_assignment.py` adds an original-row
+   `obs_id`, recovers station-series boundaries from date order, flags fast
+   drift, clusters stable coordinates with haversine DBSCAN, merges nearby
+   relocations, and attaches stable `site_id` values. It writes
+   `data/processed/site_assignments.csv`, `data/processed/site_lookup.csv`, and
+   site reports under `reports/site_id/`.
+2. **Quality check:** `src/site_quality_check.py` compares SST relative to
+   neighboring sites before and after on/off-position transitions. The result is
+   `reports/site_id/flagged_sst_check.csv`; assigned rows remain eligible for
+   climatology through `use_for_climatology`.
+3. **Interactive exploration:** `src/site_explorer.py` combines the assignment
+   outputs with `src/site_explorer_template.html` and writes the standalone
+   `reports/site_id/site_explorer.html` page.
+4. **Chronological split:** `src/split.py` converts two-digit years, validates
+   dates, sorts rows by date and coordinates, and writes
+   `data/processed/train.csv`, `validation.csv`, and `test.csv`. The split
+   boundaries are the ones documented above; random shuffling is not used.
+5. **Exploratory target construction:** `notebooks/preprocessing.py` joins
+   assignments, fits a site/month SST climatology on training rows, calculates
+   SSTA, creates nine current ENSO classes, and looks up the first available
+   same-site class at least three months ahead. It returns a modeling dataframe
+   but does not save one or train a model.
+
+### Repository outputs
+
+| Location | Description |
+| --- | --- |
+| `data/processed/site_assignments.csv` | One site-assignment row per raw observation |
+| `data/processed/site_lookup.csv` | Site-level nominal coordinates and statistics |
+| `data/processed/train.csv` | Chronological training partition |
+| `data/processed/validation.csv` | Chronological validation partition |
+| `data/processed/test.csv` | Chronological held-out test partition |
+| `reports/site_id/` | Clustering diagnostics, maps, review queue, SST check, and explorer |
+| `docs/site_id.md` | Detailed site-identification method and validation |
+
+For detailed site-assignment rationale and output columns, see
+[docs/site_id.md](docs/site_id.md). The repository tests are in
+[tests/test_site_assignment.py](tests/test_site_assignment.py) and
+[tests/test_split.py](tests/test_split.py).
 
 ## License
 
