@@ -1,17 +1,28 @@
-from pathlib import Path
-from ucimlrepo import fetch_ucirepo
+from ucimlrepo import fetch_ucirepo 
+import pandas as pd
+  
+# fetch dataset 
+el_nino = fetch_ucirepo(id=122) 
+  
+# data (as pandas dataframes) 
+df = el_nino.data.features.copy()
 
-el_nino = fetch_ucirepo(id=122)
+# # metadata 
+# print(el_nino.metadata) 
 
-X = el_nino.data.features
-y = el_nino.data.targets
+# # variable information 
+# print(el_nino.variables) 
 
-output_dir = Path(__file__).parent.parent / "data"
-output_dir.mkdir(exist_ok=True)
+# creating a new 4-digit year column
+df["full_year_val"] = df["year"] + 1900
 
-X.to_csv(output_dir / "el_nino_features.csv", index=False)
+# Create datetime using the new year column
+df["datetime"] = pd.to_datetime(
+    {
+        "year": df["full_year_val"],
+        "month": df["month"],
+        "day": df["day"]
+    }
+)
 
-if not y.empty:
-    y.to_csv(output_dir / "el_nino_targets.csv", index=False)
-
-print(f"Saved CSV files to {output_dir}")
+# print(df.head(6)) # testing --> works!

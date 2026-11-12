@@ -1,0 +1,24 @@
+# Evaluation environment resolved on Python 3.13.5.
+# macOS LightGBM also needs an OpenMP runtime; see docs/evaluation.md.
+cloudpickle==3.1.2
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.68.0
+joblib==1.6.0
+kiwisolver==1.5.1
+lightgbm==4.7.0
+matplotlib==3.11.2
+narwhals==2.28.0
+numpy==2.5.4
+packaging==26.3
+pandas==3.1.1
+pillow==13.0.0
+pyparsing==3.3.3
+python-dateutil==4.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+shap==0.54.1
+slicer==0.0.8
+threadpoolctl==3.8.0
+tqdm==4.70.1
+tzdata==2026.6
