@@ -1,7 +1,9 @@
 .venv/
+.venv-evaluation/
 __pycache__/
 
 # Regenerable model outputs (python -m src.interim_dataset, python -m src.baselines)
 data/interim/
 reports/baselines/
+reports/evaluation/
 models/
