@@ -113,6 +113,9 @@ def main():
     print(f"Rows excluded from training/scoring due to missing target: {missing_count:,}")
     print(model_df["target_class"].value_counts())
     print(model_df["target_class"].value_counts(normalize=True).mul(100))
+
+    output_path = ROOT / "data" / "processed" / "model_data.csv"
+    model_df.to_csv(output_path, index=False)
     return model_df
 
 
