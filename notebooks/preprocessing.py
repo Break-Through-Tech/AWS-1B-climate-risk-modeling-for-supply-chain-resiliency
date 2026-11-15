@@ -8,7 +8,7 @@ ASSIGN_PATH = ROOT / "data" / "processed" / "site_assignments.csv"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.split import split_record
+from src.split import TEST_END, TRAIN_END, VALIDATION_END, split_record
 
 
 def create_target(ssta):
@@ -85,16 +85,16 @@ def main():
     df["target_date"] = df["date"] + pd.DateOffset(months=3)
 
     future = df[["site_id", "date", "current_class"]].rename(
-        columns={"current_class": "future_class"}
+        columns={"date": "label_date", "current_class": "future_class"}
     )
     eligible = df["site_id"].notna()
     target_lookup = pd.merge_asof(
         df.loc[eligible, ["_row_id", "site_id", "target_date"]]
         .sort_values(["target_date", "site_id"]),
         future[future["site_id"].notna()]
-        .sort_values(["date", "site_id"]),
+        .sort_values(["label_date", "site_id"]),
         left_on="target_date",
-        right_on="date",
+        right_on="label_date",
         by="site_id",
         direction="forward",
     )
@@ -102,6 +102,22 @@ def main():
     df.loc[target_lookup["_row_id"], "target_class"] = target_lookup[
         "future_class"
     ].to_numpy()
+    df["label_date"] = pd.NaT
+    df.loc[target_lookup["_row_id"], "label_date"] = target_lookup[
+        "label_date"
+    ].to_numpy()
+
+    # A label is usable only if its source observation was available by the
+    # end of the row's partition. Keep the date for auditing the saved data.
+    cutoff = df["split"].map(
+        {
+            "train": pd.Timestamp(TRAIN_END),
+            "validation": pd.Timestamp(VALIDATION_END),
+            "test": pd.Timestamp(TEST_END),
+        }
+    )
+    late_label = df["label_date"].gt(cutoff)
+    df.loc[late_label, "target_class"] = pd.NA
     df = df.drop(columns=["_row_id", "target_date"])
 
     # Keep missing labels missing in the complete dataframe, but exclude them
@@ -110,6 +126,7 @@ def main():
     model_df = df.dropna(subset=["target_class"]).copy()
 
     missing_count = len(df) - len(model_df)
+    print(f"Rows with labels beyond their split cutoff: {late_label.sum():,}")
     print(f"Rows excluded from training/scoring due to missing target: {missing_count:,}")
     print(model_df["target_class"].value_counts())
     print(model_df["target_class"].value_counts(normalize=True).mul(100))
