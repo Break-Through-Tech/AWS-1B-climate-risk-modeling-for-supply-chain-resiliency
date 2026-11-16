@@ -1,3 +1,4 @@
+import math
 import unittest
 
 import pandas as pd
@@ -10,6 +11,29 @@ from notebooks.preprocessing import (
 
 
 class MonthlyPreprocessingTest(unittest.TestCase):
+    def test_month_encoding_wraps_december_to_january(self):
+        observations = pd.DataFrame(
+            {
+                "site_id": ["A"] * 4,
+                "date": ["900101", "900201", "900701", "901201"],
+                "split": ["train"] * 4,
+                "ss_temp": [25.0] * 4,
+                "zon_winds": [1.0] * 4,
+                "mer_winds": [1.0] * 4,
+                "humidity": [80.0] * 4,
+                "air_temp": [25.0] * 4,
+            }
+        )
+        monthly = aggregate_monthly(observations).set_index("month")
+        self.assertAlmostEqual(monthly.loc[1, "month_sin"], 0.0)
+        self.assertAlmostEqual(monthly.loc[1, "month_cos"], 1.0)
+        self.assertAlmostEqual(monthly.loc[7, "month_cos"], -1.0)
+        jan_to_dec = math.dist(monthly.loc[1, ["month_sin", "month_cos"]],
+                               monthly.loc[12, ["month_sin", "month_cos"]])
+        jan_to_feb = math.dist(monthly.loc[1, ["month_sin", "month_cos"]],
+                               monthly.loc[2, ["month_sin", "month_cos"]])
+        self.assertAlmostEqual(jan_to_dec, jan_to_feb)
+
     def test_climatology_weights_training_years_equally(self):
         observations = pd.DataFrame(
             {

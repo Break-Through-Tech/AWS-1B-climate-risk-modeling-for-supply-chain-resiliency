@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from pathlib import Path
 import sys
@@ -161,6 +162,9 @@ def aggregate_monthly(df):
     )
     monthly = monthly.rename(columns={"ss_temp": "monthly_sst"})
     monthly["month"] = monthly["month_start"].dt.month
+    month_angle = 2 * np.pi * (monthly["month"] - 1) / 12
+    monthly["month_sin"] = np.sin(month_angle)
+    monthly["month_cos"] = np.cos(month_angle)
     monthly["year"] = monthly["month_start"].dt.year
     return monthly
 
