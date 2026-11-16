@@ -166,7 +166,14 @@ def aggregate_monthly(df):
 
 
 def add_monthly_anomalies(monthly, observations):
-    """Average training-year monthly SST equally for site/month climatology."""
+    """Average training-year monthly sensor values equally by site/month."""
+    sensors = ["ss_temp", "zon_winds", "mer_winds", "humidity"]
+    baselines = {
+        "ss_temp": "clim_sst",
+        "zon_winds": "clim_zon_winds",
+        "mer_winds": "clim_mer_winds",
+        "humidity": "clim_humidity",
+    }
     source = observations.loc[
         observations["split"].eq("train")
         & observations["use_for_climatology"].eq(True)  # noqa: E712
@@ -175,16 +182,18 @@ def add_monthly_anomalies(monthly, observations):
     source["month_start"] = source["date"].dt.to_period("M").dt.to_timestamp()
     training_months = source.groupby(
         ["site_id", "month_start", "month"], as_index=False
-    )["ss_temp"].mean()
+    )[sensors].mean()
     climatology = (
-        training_months.groupby(["site_id", "month"], as_index=False)["ss_temp"]
+        training_months.groupby(["site_id", "month"], as_index=False)[sensors]
         .mean()
-        .rename(columns={"ss_temp": "clim_sst"})
+        .rename(columns=baselines)
     )
     result = monthly.merge(
         climatology, on=["site_id", "month"], how="left", validate="many_to_one"
     )
     result["ssta"] = result["monthly_sst"] - result["clim_sst"]
+    for sensor in ("zon_winds", "mer_winds", "humidity"):
+        result[f"{sensor}_anomaly"] = result[sensor] - result[baselines[sensor]]
     result["current_class"] = result["ssta"].apply(create_target).astype("string")
     return result
 
