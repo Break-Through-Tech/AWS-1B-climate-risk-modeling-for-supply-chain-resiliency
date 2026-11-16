@@ -66,6 +66,10 @@ Time series folds use 5 splits and a gap of 0 on the distinct training dates onl
 
 Folds whose training side ends before 1992 are the small early array. The official test score is the 1997–98 block.
 
+## Baselines
+
+`python -m src.baselines` scores three baselines on the three-month-ahead risk class: majority class, persistence (today's class stays the same) and logistic regression. It writes predictions, scores and settings to `reports/baselines/` and does not touch the test block unless `--use-test` is passed. Until the final target and feature table exists, run `python -m src.interim_dataset` first to build a stand-in. See [docs/baselines.md](docs/baselines.md) for the input contract, outputs and interim results. On the stand-in table, persistence scores 0.517 validation Macro F1 and is the bar for LightGBM.
+
 ## Project Goals
 
 **Primary:** Build a classification model using Gradient Boosted Trees and time-series feature engineering that significantly outperforms a naive baseline at predicting climate risk thresholds (extreme warming/cooling spikes vs. normal states), evaluated on Macro F1-Score.
