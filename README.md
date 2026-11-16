@@ -50,11 +50,11 @@ The buoy record is split on the calendar date built from `year`, `month`, and `d
 
 `n_splits` is 5. `python -m src.split` reads `data/el_nino_features.csv` and writes `data/processed/train.csv`, `data/processed/validation.csv`, and `data/processed/test.csv`. Each file keeps the original columns and adds `split`, whose values are `train`, `validation`, and `test`. The raw table stays at `data/el_nino_features.csv`.
 
-Climatology, imputation, rolling windows, and any scaler must be fit on dates through 1994-12-31 and then applied forward. Climatology is **not-yet**. Imputation is **not-yet**. Feature windows are **not-yet**. Those artifacts do not exist.
+The missing-data export uses only earlier measured values to fill supported gaps in wind, humidity, and air temperature; it leaves SST unchanged. Modeling preprocessing fits the site/month climatology on training rows. Rolling feature windows and a learned scaler have not been added.
 
 Lags and rolling windows look backward inside one site.
 
-The label is the anomaly on the same row, so that row's sea surface temperature is not also a feature.
+The modeling targets are future anomalies from the same site. The current row's SST and SSTA can be used as predictors because they are available at forecast time.
 
 Time series folds use 5 splits and a gap of 0 on the distinct training dates only. On the current raw file:
 
@@ -212,7 +212,9 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
    dates, sorts rows by date and coordinates, and writes
    `data/processed/train.csv`, `validation.csv`, and `test.csv`. The split
    boundaries are the ones documented above; random shuffling is not used.
-5. **Target construction:** `notebooks/preprocessing.py` joins assignments and
+5. **Target construction:** `notebooks/preprocessing.py` reads the validated
+   `data/el_nino_missing_handled.csv` input, verifies its row alignment with the
+   original observations, joins site assignments, and
    creates two modeling datasets. The daily classification path uses a training-only
    site/month climatology and the first available same-site class at least three
    months ahead. The monthly regression path averages readings within each site
@@ -229,6 +231,7 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
 | `data/processed/train.csv` | Chronological training partition |
 | `data/processed/validation.csv` | Chronological validation partition |
 | `data/processed/test.csv` | Chronological held-out test partition |
+| `data/el_nino_missing_handled.csv` | Past-only fills for missing wind, humidity, and air temperature; measured SST unchanged |
 | `data/processed/model_data_classification.csv` | Daily observations and future risk classes |
 | `data/processed/model_data_monthly.csv` | Monthly site means, SSTA, and exact three-month future SSTA and class |
 | `reports/site_id/` | Clustering diagnostics, maps, review queue, SST check, and explorer |

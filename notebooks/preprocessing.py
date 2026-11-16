@@ -3,7 +3,8 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_PATH = ROOT / "data" / "el_nino_features.csv"
+RAW_PATH = ROOT / "data" / "el_nino_missing_handled.csv"
+ORIGINAL_PATH = ROOT / "data" / "el_nino_features.csv"
 ASSIGN_PATH = ROOT / "data" / "processed" / "site_assignments.csv"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -35,8 +36,14 @@ def create_target(ssta):
 
 
 def load_observations(raw_path=RAW_PATH, assignment_path=ASSIGN_PATH):
-    """Join raw observations to stable physical buoy sites."""
+    """Join filled observations to sites after checking raw-row alignment."""
     raw = pd.read_csv(raw_path)
+    if raw_path == RAW_PATH:
+        original = pd.read_csv(ORIGINAL_PATH)
+        unchanged = ["year", "month", "day", "date", "latitude", "longitude", "ss_temp"]
+        pd.testing.assert_frame_equal(
+            raw[unchanged], original[unchanged], check_exact=True
+        )
     raw.insert(0, "obs_id", range(len(raw)))
 
     assignments = pd.read_csv(assignment_path)
