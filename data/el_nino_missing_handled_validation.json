@@ -1,0 +1,97 @@
+{
+  "rows": 178080,
+  "columns": [
+    "year",
+    "month",
+    "day",
+    "date",
+    "latitude",
+    "longitude",
+    "zon_winds",
+    "mer_winds",
+    "humidity",
+    "air_temp",
+    "ss_temp"
+  ],
+  "rules": {
+    "air_temp": {
+      "method": "last_then_median",
+      "history_days": 7,
+      "max_age_days": 3
+    },
+    "mer_winds": {
+      "method": "last_then_median",
+      "history_days": 30,
+      "max_age_days": 3
+    },
+    "zon_winds": {
+      "method": "last",
+      "history_days": 30,
+      "max_age_days": 1
+    },
+    "humidity": {
+      "method": "last",
+      "history_days": 30,
+      "max_age_days": 1
+    }
+  },
+  "filled_cells": 53899,
+  "fills_by_column": {
+    "zon_winds": 12762,
+    "mer_winds": 13635,
+    "humidity": 16282,
+    "air_temp": 11220,
+    "ss_temp": 0
+  },
+  "missing_before_by_column": {
+    "year": 0,
+    "month": 0,
+    "day": 0,
+    "date": 0,
+    "latitude": 0,
+    "longitude": 0,
+    "zon_winds": 25163,
+    "mer_winds": 25162,
+    "humidity": 65761,
+    "air_temp": 18237,
+    "ss_temp": 17007
+  },
+  "missing_after_by_column": {
+    "year": 0,
+    "month": 0,
+    "day": 0,
+    "date": 0,
+    "latitude": 0,
+    "longitude": 0,
+    "zon_winds": 12401,
+    "mer_winds": 11527,
+    "humidity": 49479,
+    "air_temp": 7017,
+    "ss_temp": 17007
+  },
+  "remaining_missing_cells": 97431,
+  "nan_free": false,
+  "directly_ready_for_nan_intolerant_model": false,
+  "checks": {
+    "original_schema_and_row_order": true,
+    "measured_values_unchanged": true,
+    "sst_unchanged": true,
+    "all_replacements_logged": true,
+    "past_only_donor_dates_and_age_limits": true,
+    "no_infinite_values": true,
+    "notebook_reference_checked": true,
+    "saved_csv_and_log_rechecked": true,
+    "source_file_unchanged": true
+  },
+  "training_note": "Remaining missing predictors require an explicit training-time policy. Split chronologically before fitting any learned imputer. Do not impute SST labels.",
+  "scope_note": "Only the tested missing-data treatment was applied; this does not certify all possible data-quality issues or final model accuracy.",
+  "area_note": "Temporary 5-degree latitude x 10-degree longitude bins are not buoy IDs.",
+  "source_row_note": "Audit source_row is zero-based; source_csv_line includes the CSV header.",
+  "created_utc": "2026-11-05T21:25:56.200718+00:00",
+  "source": "C:\\Users\\corte\\OneDrive\\Desktop\\btt-aws1b\\AWS-1B-climate-risk-modeling-for-supply-chain-resiliency\\data\\el_nino_features.csv",
+  "output": "C:\\Users\\corte\\OneDrive\\Desktop\\btt-aws1b\\AWS-1B-climate-risk-modeling-for-supply-chain-resiliency\\data\\el_nino_missing_handled.csv",
+  "fill_log": "C:\\Users\\corte\\OneDrive\\Desktop\\btt-aws1b\\AWS-1B-climate-risk-modeling-for-supply-chain-resiliency\\data\\el_nino_missing_handled_fill_log.csv",
+  "source_sha256": "68df55f034bdded1e33d60d0bec4193cefb2629d8d40d701cb2bb4391276305c",
+  "output_sha256": "ea11d1b05d31e74b31cbddb2c38572f117082f0fd0c918797ef44606948d34c1",
+  "fill_log_sha256": "a4421fed0796e1988e6768903d22c28d852a9635d8ef5dde5b2f90538eba9885"
+}
