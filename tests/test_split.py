@@ -1,13 +1,97 @@
 import unittest
-from datetime import date
+from dataclasses import asdict, replace
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
 
-from src.split import split_record
+from src.split import DEFAULT_CUTOFFS, split_record
 
 
 class SplitRecordTest(unittest.TestCase):
+    def test_reversed_cutoff_ranges_raise(self):
+        for partition in ("train", "validation", "test"):
+            start = f"{partition}_start"
+            end = f"{partition}_end"
+            cutoffs = replace(
+                DEFAULT_CUTOFFS,
+                **{start: getattr(DEFAULT_CUTOFFS, end) + timedelta(days=1)},
+            )
+            with self.subTest(partition=partition):
+                with self.assertRaisesRegex(ValueError, f"{start}.*{end}"):
+                    split_record(
+                        pd.DataFrame(columns=["year", "month", "day", "latitude", "longitude"]),
+                        cutoffs,
+                    )
+
+    def test_overlapping_or_out_of_order_cutoffs_raise(self):
+        cases = [
+            ({"validation_start": date(1994, 12, 31)}, "train_end.*validation_start"),
+            ({"validation_start": date(1994, 12, 30)}, "train_end.*validation_start"),
+            ({"test_start": date(1996, 12, 31)}, "validation_end.*test_start"),
+            ({"test_start": date(1996, 12, 30)}, "validation_end.*test_start"),
+            (
+                {"validation_start": date(1980, 1, 1), "validation_end": date(1980, 2, 1)},
+                "train_end.*validation_start",
+            ),
+            (
+                {"test_start": date(1993, 1, 1), "test_end": date(1993, 12, 31)},
+                "validation_end.*test_start",
+            ),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                with self.assertRaisesRegex(ValueError, message):
+                    split_record(
+                        pd.DataFrame(columns=["year", "month", "day", "latitude", "longitude"]),
+                        replace(DEFAULT_CUTOFFS, **changes),
+                    )
+
+    def test_cutoff_endpoints_must_be_calendar_dates(self):
+        for partition in ("train", "validation", "test"):
+            for endpoint in ("start", "end"):
+                field = f"{partition}_{endpoint}"
+                for value in (None, "1994-12-31", datetime(1994, 12, 31, 12)):
+                    with self.subTest(field=field, value=value):
+                        with self.assertRaisesRegex(ValueError, field):
+                            split_record(
+                                pd.DataFrame(
+                                    columns=["year", "month", "day", "latitude", "longitude"]
+                                ),
+                                replace(DEFAULT_CUTOFFS, **{field: value}),
+                            )
+
+    def test_custom_single_day_ranges_and_gaps(self):
+        cutoffs = replace(
+            DEFAULT_CUTOFFS,
+            train_start=date(1994, 6, 15),
+            train_end=date(1994, 6, 15),
+            validation_start=date(1994, 6, 17),
+            validation_end=date(1994, 6, 17),
+            test_start=date(1994, 6, 19),
+            test_end=date(1994, 6, 19),
+        )
+        frame = pd.DataFrame(
+            {
+                "year": [94, 94, 94],
+                "month": [6, 6, 6],
+                "day": [19, 15, 17],
+                "latitude": [0.0, 0.0, 0.0],
+                "longitude": [-110.0, -110.0, -110.0],
+            }
+        )
+        for config in (cutoffs, asdict(cutoffs)):
+            with self.subTest(config_type=type(config).__name__):
+                result = split_record(frame, config)
+                for name, expected_day in (("train", 15), ("validation", 17), ("test", 19)):
+                    partition = getattr(result, name)
+                    self.assertEqual(partition["day"].tolist(), [expected_day])
+                    self.assertEqual(partition["split"].tolist(), [name])
+                self.assertEqual(result.folds, [])
+
+        with self.assertRaisesRegex(ValueError, "1994-06-16.*outside"):
+            split_record(frame.iloc[[0]].assign(day=16), cutoffs)
+
     def test_year_1994_is_training_and_year_79_raises(self):
         row = {
             "year": 1994,

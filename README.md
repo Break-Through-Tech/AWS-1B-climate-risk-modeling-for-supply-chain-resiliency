@@ -50,13 +50,15 @@ The buoy record is split on the calendar date built from `year`, `month`, and `d
 
 `n_splits` is 5. `python -m src.split` reads `data/el_nino_features.csv` and writes `data/processed/train.csv`, `data/processed/validation.csv`, and `data/processed/test.csv`. Each file keeps the original columns and adds `split`, whose values are `train`, `validation`, and `test`. The raw table stays at `data/el_nino_features.csv`.
 
-Climatology, imputation, rolling windows, and any scaler must be fit on dates through 1994-12-31 and then applied forward. Climatology is **not-yet**. Imputation is **not-yet**. Feature windows are **not-yet**. Those artifacts do not exist.
+Custom cutoffs must use `datetime.date` values. Each start must be on or before its end, with training ending before validation starts and validation ending before test starts. Invalid ranges raise `ValueError` before splitting.
 
-Lags and rolling windows look backward inside one site.
+Climatology, imputation, and any scaler must be fit only on the fitting partition and then applied forward. During chronological CV, this means refitting inside each fold. Interim baseline preparation exists; the final shared cleaned feature/target dataset remains an upstream handoff.
 
-The label is the anomaly on the same row, so that row's sea surface temperature is not also a feature.
+Lags and rolling windows must use earlier observations from the same site. The evaluation pipeline evaluates a future local anomaly class: the first valid same-site observation from 90 through 97 days after the issue date. Future target information must never be used as an issue-time feature. See the [evaluation contract](docs/evaluation.md) for target thresholds and eligibility rules.
 
-Time series folds use 5 splits and a gap of 0 on the distinct training dates only. On the current raw file:
+Upstream leakage checks must show that measurements after the fitting cutoff cannot affect fitted statistics or training features. With fitted statistics held fixed, changing later observations must not change earlier lags or rolling windows. The evaluation guide documents the required evidence.
+
+The existing `src.split` utility emits five zero-gap folds on distinct training dates. These legacy split examples are not the evaluation model-selection protocol. On the current raw file:
 
 1. train 1980-03-07 through 1982-11-16, test 1982-11-17 through 1985-09-09
 2. train 1980-03-07 through 1985-09-09, test 1985-09-10 through 1988-01-07
@@ -64,7 +66,11 @@ Time series folds use 5 splits and a gap of 0 on the distinct training dates onl
 4. train 1980-03-07 through 1990-05-06, test 1990-05-07 through 1992-09-02
 5. train 1980-03-07 through 1992-09-02, test 1992-09-03 through 1994-12-31
 
-Folds whose training side ends before 1992 are the small early array. The official test score is the 1997–98 block.
+The evaluation protocol requires three expanding calendar folds scoring 1989–90, 1991–92, and 1993–94, with requested and observed target dates purged at each partition boundary. Validation covers 1995–96; the final held-out test is the 1997–98 block and is scored only after validation selection is frozen.
+
+## Baselines
+
+`python -m src.baselines` scores three baselines on the three-month-ahead risk class: majority class, persistence (today's class stays the same) and logistic regression. It writes predictions, scores and settings to `reports/baselines/` and does not touch the test block unless `--use-test` is passed. Until the final target and feature table exists, run `python -m src.interim_dataset` first to build a stand-in. See [docs/baselines.md](docs/baselines.md) for the input contract, outputs and interim results. The reported 0.517 validation Macro F1 for persistence is a historical interim result. Final comparisons require regenerated predictions on the shared final dataset after the training-boundary and CV updates described below.
 
 ## Project Goals
 
@@ -167,9 +173,10 @@ Shivangi Manel
 
 The codebase currently implements data acquisition support, physical-site
 reconstruction, site-quality validation, chronological splitting, and an
-exploratory target-building path. It does not yet include model training,
-prediction, completed imputation, rolling-window features, or a deployed
-dashboard.
+exploratory target-building path. Interim baseline training and prediction,
+saved-prediction evaluation, and LightGBM explanation commands are also available.
+Final shared data/features, corrected baseline training, and actual LightGBM
+artifacts remain integration dependencies; a deployed dashboard is not included.
 
 Run the implemented workflow from the repository root:
 
@@ -234,6 +241,29 @@ For detailed site-assignment rationale and output columns, see
 [docs/site_id.md](docs/site_id.md). The repository tests are in
 [tests/test_site_assignment.py](tests/test_site_assignment.py) and
 [tests/test_split.py](tests/test_split.py).
+
+## Evaluation and LightGBM explanations
+
+The evaluation commands consume saved predictions and verified training
+receipts; they do not train or tune project models. See
+[docs/evaluation.md](docs/evaluation.md) for the input contracts, synthetic
+smoke workflow, dependency setup, and explicit final-test gate.
+
+```bash
+python -m src.evaluate --manifest path/to/validation-manifest.json
+python -m src.explain --evaluation-run reports/evaluation/RUN_ID
+```
+
+LightGBM explanations run when LightGBM is included in the comparison, even
+when another model wins. Real final comparisons require recorded team agreement
+on the target and cleaned input, upstream uniqueness/leakage checks, corrected
+baseline training, and actual split-specific model artifacts. The
+[evaluation guide](docs/evaluation.md) documents the required inputs and checks.
+Synthetic test success does not establish project results.
+
+This implementation branch is based on the baseline work in PR #25. Its current
+trainer still needs the observed-target boundary and training-only tuning
+updates before it can supply an accepted final comparison.
 
 ## License
 

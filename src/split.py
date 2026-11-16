@@ -165,9 +165,28 @@ def _text(value):
 
 def _cutoffs(cutoffs):
     if cutoffs is None:
-        return DEFAULT_CUTOFFS
-    if isinstance(cutoffs, dict):
-        return Cutoffs(**cutoffs)
+        cutoffs = DEFAULT_CUTOFFS
+    elif isinstance(cutoffs, dict):
+        cutoffs = Cutoffs(**cutoffs)
+
+    for partition in ("train", "validation", "test"):
+        start_name, end_name = f"{partition}_start", f"{partition}_end"
+        start, end = getattr(cutoffs, start_name), getattr(cutoffs, end_name)
+        for field, value in ((start_name, start), (end_name, end)):
+            if type(value) is not date:
+                raise ValueError(f"{field} must be a datetime.date; got {value!r}")
+        if start > end:
+            raise ValueError(
+                f"{start_name} ({start}) must be on or before {end_name} ({end})"
+            )
+
+    for end_name, start_name in (
+        ("train_end", "validation_start"),
+        ("validation_end", "test_start"),
+    ):
+        end, start = getattr(cutoffs, end_name), getattr(cutoffs, start_name)
+        if end >= start:
+            raise ValueError(f"{end_name} ({end}) must be before {start_name} ({start})")
     return cutoffs
 
 
