@@ -34,12 +34,12 @@ def create_target(ssta):
     return "very_strong_la_nina"
 
 
-def main():
-    # The site-assignment script uses the raw row position as obs_id.
-    raw = pd.read_csv(RAW_PATH)
+def load_observations(raw_path=RAW_PATH, assignment_path=ASSIGN_PATH):
+    """Join raw observations to stable physical buoy sites."""
+    raw = pd.read_csv(raw_path)
     raw.insert(0, "obs_id", range(len(raw)))
 
-    assignments = pd.read_csv(ASSIGN_PATH)
+    assignments = pd.read_csv(assignment_path)
     df = raw.merge(
         assignments[["obs_id", "site_id", "use_for_climatology"]],
         on="obs_id",
@@ -50,16 +50,21 @@ def main():
         raise ValueError(
             f"Site assignment merge changed the row count: {len(raw):,} -> {len(df):,}"
         )
-    missing_sites = int(df["site_id"].isna().sum())
-    print(f"Rows without a site assignment: {missing_sites:,}")
+    print(f"Rows without a site assignment: {df['site_id'].isna().sum():,}")
+    return df
 
-    # Build the chronological partitions from the raw observations.
+
+def add_splits(df):
+    """Assign chronological train, validation, and test partitions."""
     split_result = split_record(df)
-    df = pd.concat(
+    return pd.concat(
         [split_result.train, split_result.validation, split_result.test],
         ignore_index=True,
     )
 
+
+def add_daily_anomalies(df):
+    """Calculate the original daily site/month climatology and classes."""
     # Fit the site/month climatology on training rows only, then apply it to
     # all rows. Rows excluded from climatology are still retained in df.
     train = df[
@@ -75,7 +80,23 @@ def main():
 
     df["ssta"] = df["ss_temp"] - df["clim_sst"]
     df["current_class"] = df["ssta"].apply(create_target)
+    return df
 
+
+def split_cutoff(df):
+    """The latest target date allowed in each row's partition."""
+    return df["split"].map(
+        {
+            "train": pd.Timestamp(TRAIN_END),
+            "validation": pd.Timestamp(VALIDATION_END),
+            "test": pd.Timestamp(TEST_END),
+        }
+    )
+
+
+def add_future_daily_classes(df):
+    """Keep the existing first-reading-at-least-three-months-later labels."""
+    df = df.copy()
     # Create a calendar date three months ahead. The observations are not
     # guaranteed to occur every day, so use the first available reading on or
     # after that target date within the same physical site.
@@ -109,31 +130,89 @@ def main():
 
     # A label is usable only if its source observation was available by the
     # end of the row's partition. Keep the date for auditing the saved data.
-    cutoff = df["split"].map(
-        {
-            "train": pd.Timestamp(TRAIN_END),
-            "validation": pd.Timestamp(VALIDATION_END),
-            "test": pd.Timestamp(TEST_END),
-        }
-    )
+    cutoff = split_cutoff(df)
     late_label = df["label_date"].gt(cutoff)
     df.loc[late_label, "target_class"] = pd.NA
     df = df.drop(columns=["_row_id", "target_date"])
 
-    # Keep missing labels missing in the complete dataframe, but exclude them
-    # from any model training or scoring dataset.
     df["target_class"] = df["target_class"].astype("string")
-    model_df = df.dropna(subset=["target_class"]).copy()
-
-    missing_count = len(df) - len(model_df)
     print(f"Rows with labels beyond their split cutoff: {late_label.sum():,}")
-    print(f"Rows excluded from training/scoring due to missing target: {missing_count:,}")
-    print(model_df["target_class"].value_counts())
-    print(model_df["target_class"].value_counts(normalize=True).mul(100))
+    return df
 
-    output_path = ROOT / "data" / "processed" / "model_data.csv"
-    model_df.to_csv(output_path, index=False)
-    return model_df
+
+def aggregate_monthly(df):
+    """Average available sensor readings within each site and calendar month."""
+    source = df.copy()
+    source["date"] = pd.to_datetime(source["date"], format="%y%m%d")
+    source["month_start"] = source["date"].dt.to_period("M").dt.to_timestamp()
+    sensors = ["ss_temp", "zon_winds", "mer_winds", "humidity", "air_temp"]
+    monthly = source.groupby(
+        ["site_id", "month_start", "split"], as_index=False
+    ).agg(
+        **{column: (column, "mean") for column in sensors},
+        readings=("ss_temp", "count"),
+    )
+    monthly = monthly.rename(columns={"ss_temp": "monthly_sst"})
+    monthly["month"] = monthly["month_start"].dt.month
+    monthly["year"] = monthly["month_start"].dt.year
+    return monthly
+
+
+def add_monthly_anomalies(monthly, observations):
+    """Average training-year monthly SST equally for site/month climatology."""
+    source = observations.loc[
+        observations["split"].eq("train")
+        & observations["use_for_climatology"].eq(True)  # noqa: E712
+    ].copy()
+    source["date"] = pd.to_datetime(source["date"], format="%y%m%d")
+    source["month_start"] = source["date"].dt.to_period("M").dt.to_timestamp()
+    training_months = source.groupby(
+        ["site_id", "month_start", "month"], as_index=False
+    )["ss_temp"].mean()
+    climatology = (
+        training_months.groupby(["site_id", "month"], as_index=False)["ss_temp"]
+        .mean()
+        .rename(columns={"ss_temp": "clim_sst"})
+    )
+    result = monthly.merge(
+        climatology, on=["site_id", "month"], how="left", validate="many_to_one"
+    )
+    result["ssta"] = result["monthly_sst"] - result["clim_sst"]
+    result["current_class"] = result["ssta"].apply(create_target).astype("string")
+    return result
+
+
+def add_future_monthly_targets(monthly):
+    """Match each site to its SSTA exactly three calendar months later."""
+    source = monthly.copy()
+    source["label_month"] = source["month_start"] + pd.DateOffset(months=3)
+    future = source[["site_id", "month_start", "ssta"]].rename(
+        columns={"month_start": "label_month", "ssta": "target_ssta"}
+    )
+    result = source.merge(
+        future, on=["site_id", "label_month"], how="left", validate="many_to_one"
+    )
+    result.loc[
+        result["label_month"].gt(split_cutoff(result)), "target_ssta"
+    ] = float("nan")
+    result["target_class"] = result["target_ssta"].apply(create_target).astype("string")
+    return result
+
+
+def main():
+    observations = add_splits(load_observations())
+    daily = add_future_daily_classes(add_daily_anomalies(observations))
+    classification = daily.dropna(subset=["target_class"]).copy()
+    classification.to_csv(ROOT / "data" / "processed" / "model_data_classification.csv", index=False)
+    print(f"Daily classification rows: {len(classification):,}")
+
+    monthly = add_future_monthly_targets(
+        add_monthly_anomalies(aggregate_monthly(observations), observations)
+    )
+    monthly_model = monthly.dropna(subset=["target_ssta"]).copy()
+    monthly_model.to_csv(ROOT / "data" / "processed" / "model_data_monthly.csv", index=False)
+    print(f"Monthly regression rows: {len(monthly_model):,}")
+    return classification, monthly_model
 
 
 if __name__ == "__main__":

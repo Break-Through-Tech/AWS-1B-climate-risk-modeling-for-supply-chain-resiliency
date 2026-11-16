@@ -212,11 +212,13 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
    dates, sorts rows by date and coordinates, and writes
    `data/processed/train.csv`, `validation.csv`, and `test.csv`. The split
    boundaries are the ones documented above; random shuffling is not used.
-5. **Exploratory target construction:** `notebooks/preprocessing.py` joins
-   assignments, fits a site/month SST climatology on training rows, calculates
-   SSTA, creates nine current ENSO classes, and looks up the first available
-   same-site class at least three months ahead. It returns a modeling dataframe
-   but does not save one or train a model.
+5. **Target construction:** `notebooks/preprocessing.py` joins assignments and
+   creates two modeling datasets. The daily classification path uses a training-only
+   site/month climatology and the first available same-site class at least three
+   months ahead. The monthly regression path averages readings within each site
+   and calendar month, gives each training year's monthly SST equal weight in the
+   climatology, and matches SSTA exactly three calendar months ahead. Both paths
+   exclude targets beyond their chronological split cutoff.
 
 ### Repository outputs
 
@@ -227,6 +229,8 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
 | `data/processed/train.csv` | Chronological training partition |
 | `data/processed/validation.csv` | Chronological validation partition |
 | `data/processed/test.csv` | Chronological held-out test partition |
+| `data/processed/model_data_classification.csv` | Daily observations and future risk classes |
+| `data/processed/model_data_monthly.csv` | Monthly site means, SSTA, and exact three-month future SSTA and class |
 | `reports/site_id/` | Clustering diagnostics, maps, review queue, SST check, and explorer |
 | `docs/site_id.md` | Detailed site-identification method and validation |
 
