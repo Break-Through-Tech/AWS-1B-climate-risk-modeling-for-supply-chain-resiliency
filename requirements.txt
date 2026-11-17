@@ -1,6 +1,7 @@
 # notebook environment
 jupyter
 ipykernel
+ipywidgets
 
 # core data handling
 pandas
