@@ -50,7 +50,7 @@ The buoy record is split on the calendar date built from `year`, `month`, and `d
 
 `n_splits` is 5. `python -m src.split` reads `data/el_nino_features.csv` and writes `data/processed/train.csv`, `data/processed/validation.csv`, and `data/processed/test.csv`. Each file keeps the original columns and adds `split`, whose values are `train`, `validation`, and `test`. The raw table stays at `data/el_nino_features.csv`.
 
-The missing-data export uses only earlier measured values to fill supported gaps in wind, humidity, and air temperature; it leaves SST unchanged. Modeling preprocessing fits the site/month climatology on training rows. Rolling feature windows and a learned scaler have not been added.
+The missing-data export uses only earlier measured values to fill supported gaps in wind, humidity, and air temperature; it leaves SST unchanged. Monthly modeling uses NOAA's fixed 1981–2010 site/month SST baseline; wind and humidity baselines still use training rows. The older daily classification path still uses a training-only site/month SST baseline. Rolling feature windows and a learned scaler have not been added.
 
 Lags and rolling windows look backward inside one site.
 
@@ -218,9 +218,18 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
    creates two modeling datasets. The daily classification path uses a training-only
    site/month climatology and the first available same-site class at least three
    months ahead. The monthly regression path averages readings within each site
-   and calendar month, gives each training year's monthly SST equal weight in the
-   climatology, and matches SSTA exactly three calendar months ahead. Both paths
+   and calendar month, subtracts NOAA's 1981–2010 site/month mean SST, and matches
+   SSTA exactly three calendar months ahead. Its wind and humidity baselines use
+   the training-year monthly means. Both paths
    exclude targets beyond their chronological split cutoff.
+
+### NOAA monthly SST baseline
+
+The [NOAA PSL ERSSTv5 1981–2010 monthly climatology](https://www.psl.noaa.gov/thredds/catalog/Datasets/noaa.ersst.v5/catalog.html) is stored at `data/reference/sst.mon.ltm.1981-2010.nc`. NetCDF (`.nc`) holds gridded SST by latitude, longitude, and month. Run `python -m src.noaa_climatology` to interpolate its 12 monthly normals to the nominal coordinates in `data/processed/site_lookup.csv` and export `data/processed/noaa_buoy_baseline.csv`. The monthly preprocessing script performs the same extraction directly, joins on `site_id` and calendar `month`, then calculates `ssta = monthly_sst - clim_sst`.
+
+Run `python notebooks/preprocessing.py`, then `python -m src.plot_noaa_check` to plot the 0N110W buoy. December 1997 should be about +4.9 °C (currently +4.88 °C). The plot is saved at `reports/noaa_baseline/0N110W_ssta.png`.
+
+ERSSTv5's 2° grid smooths the narrow strip of cold water near the equator. At 0N110W and 0N125W, its June–August normal can be 1.0–1.6 °C warmer than the local buoy normal, shifting those summer anomalies toward La Niña. The fixed 1981–2010 reference includes validation and test years; these account for four of its 30 years. This reference-period overlap is disclosed when interpreting model scores, even though NOAA's ONI also uses a fixed multidecade reference.
 
 ### Repository outputs
 
@@ -228,6 +237,7 @@ python -m unittest tests/test_site_assignment.py tests/test_split.py
 | --- | --- |
 | `data/processed/site_assignments.csv` | One site-assignment row per raw observation |
 | `data/processed/site_lookup.csv` | Site-level nominal coordinates and statistics |
+| `data/processed/noaa_buoy_baseline.csv` | NOAA 1981–2010 monthly SST normal for each buoy site |
 | `data/processed/train.csv` | Chronological training partition |
 | `data/processed/validation.csv` | Chronological validation partition |
 | `data/processed/test.csv` | Chronological held-out test partition |

@@ -7,10 +7,17 @@ from notebooks.preprocessing import (
     add_future_monthly_targets,
     add_monthly_anomalies,
     aggregate_monthly,
+    create_target,
 )
 
 
 class MonthlyPreprocessingTest(unittest.TestCase):
+    def test_three_class_thresholds(self):
+        self.assertEqual(create_target(0.5), "el_nino")
+        self.assertEqual(create_target(0.0), "neutral")
+        self.assertEqual(create_target(-0.5), "la_nina")
+        self.assertTrue(pd.isna(create_target(float("nan"))))
+
     def test_month_encoding_wraps_december_to_january(self):
         observations = pd.DataFrame(
             {
@@ -34,7 +41,7 @@ class MonthlyPreprocessingTest(unittest.TestCase):
                                monthly.loc[2, ["month_sin", "month_cos"]])
         self.assertAlmostEqual(jan_to_dec, jan_to_feb)
 
-    def test_climatology_weights_training_years_equally(self):
+    def test_noaa_sst_and_training_only_weather_baselines(self):
         observations = pd.DataFrame(
             {
                 "site_id": ["A"] * 6,
@@ -49,11 +56,14 @@ class MonthlyPreprocessingTest(unittest.TestCase):
                 "use_for_climatology": [True, True, True, False, True, True],
             }
         )
-        monthly = add_monthly_anomalies(aggregate_monthly(observations), observations)
+        noaa = pd.DataFrame({"site_id": ["A"], "month": [1], "clim_sst": [18.0]})
+        monthly = add_monthly_anomalies(
+            aggregate_monthly(observations), observations, noaa
+        )
         observed = monthly.loc[monthly["year"].eq(1995)].iloc[0]
-        self.assertEqual(observed["clim_sst"], 15.0)
+        self.assertEqual(observed["clim_sst"], 18.0)
         self.assertEqual(observed["monthly_sst"], 30.0)
-        self.assertEqual(observed["ssta"], 15.0)
+        self.assertEqual(observed["ssta"], 12.0)
         for baseline, anomaly, expected_baseline, expected_anomaly in (
             ("clim_zon_winds", "zon_winds_anomaly", 4.0, 6.0),
             ("clim_mer_winds", "mer_winds_anomaly", 3.0, 4.0),

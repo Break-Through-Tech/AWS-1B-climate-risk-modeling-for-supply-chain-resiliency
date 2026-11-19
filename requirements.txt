@@ -6,6 +6,8 @@ ipywidgets
 # core data handling
 pandas
 numpy
+xarray
+scipy
 
 # ML
 scikit-learn

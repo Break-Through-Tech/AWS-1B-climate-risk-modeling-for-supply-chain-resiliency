@@ -11,29 +11,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.split import TEST_END, TRAIN_END, VALIDATION_END, split_record
+from src.noaa_climatology import build_buoy_baseline
 
 
 def create_target(ssta):
-    """Convert an SSTA into one of the nine ENSO intensity classes."""
+    """Convert an SSTA into El Niño, neutral, or La Niña."""
     if pd.isna(ssta):
         return pd.NA
-    if ssta >= 2.0:
-        return "very_strong_el_nino"
-    if ssta >= 1.5:
-        return "strong_el_nino"
-    if ssta >= 1.0:
-        return "moderate_el_nino"
     if ssta >= 0.5:
-        return "weak_el_nino"
+        return "el_nino"
     if ssta > -0.5:
         return "neutral"
-    if ssta > -1.0:
-        return "weak_la_nina"
-    if ssta > -1.5:
-        return "moderate_la_nina"
-    if ssta > -2.0:
-        return "strong_la_nina"
-    return "very_strong_la_nina"
+    return "la_nina"
 
 
 def load_observations(raw_path=RAW_PATH, assignment_path=ASSIGN_PATH):
@@ -169,11 +158,10 @@ def aggregate_monthly(df):
     return monthly
 
 
-def add_monthly_anomalies(monthly, observations):
-    """Average training-year monthly sensor values equally by site/month."""
-    sensors = ["ss_temp", "zon_winds", "mer_winds", "humidity"]
+def add_monthly_anomalies(monthly, observations, sst_baseline):
+    """Use NOAA SST normals and training-only wind/humidity normals."""
+    sensors = ["zon_winds", "mer_winds", "humidity"]
     baselines = {
-        "ss_temp": "clim_sst",
         "zon_winds": "clim_zon_winds",
         "mer_winds": "clim_mer_winds",
         "humidity": "clim_humidity",
@@ -195,6 +183,12 @@ def add_monthly_anomalies(monthly, observations):
     result = monthly.merge(
         climatology, on=["site_id", "month"], how="left", validate="many_to_one"
     )
+    result = result.merge(
+        sst_baseline, on=["site_id", "month"], how="left", validate="many_to_one"
+    )
+    if result["clim_sst"].isna().any():
+        missing = result.loc[result["clim_sst"].isna(), ["site_id", "month"]]
+        raise ValueError(f"Missing NOAA SST baseline for {missing.drop_duplicates().to_dict('records')}")
     result["ssta"] = result["monthly_sst"] - result["clim_sst"]
     for sensor in ("zon_winds", "mer_winds", "humidity"):
         result[f"{sensor}_anomaly"] = result[sensor] - result[baselines[sensor]]
@@ -227,7 +221,9 @@ def main():
     print(f"Daily classification rows: {len(classification):,}")
 
     monthly = add_future_monthly_targets(
-        add_monthly_anomalies(aggregate_monthly(observations), observations)
+        add_monthly_anomalies(
+            aggregate_monthly(observations), observations, build_buoy_baseline()
+        )
     )
     monthly_model = monthly.dropna(subset=["target_ssta"]).copy()
     monthly_model.to_csv(ROOT / "data" / "processed" / "model_data_monthly.csv", index=False)
